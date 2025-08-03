@@ -1,0 +1,2056 @@
+--- Page 1 ---
+arXiv:2507.23776v1 [cs.CL] 31 Jul 2025
+
+Cascaded Information Disclosure for Generalized Evaluation of Problem
+Solving Capabilities
+
+Yunxiang Yan Tomohiro Sawada Kartik Goyal
+College of Computing
+Georgia Institute of Technology
+{ryan.yunxiang.yan, tsawada, kartikgo}@gatech.edu
+
+Abstract
+
+While question-answering (QA) benchmark
+performance is an automatic and scalable
+method to compare LLMs, it is an indirect
+method of evaluating their underlying problem
+solving capabilities. Therefore, we propose a
+holistic and generalizable framework based on
+cascaded question disclosure that provides a
+more accurate estimate of the models’ problem
+solving capabilities while maintaining the scal
+ability and automation. This approach collects
+model responses in a stagewise manner with
+each stage revealing partial information about
+the question designed to elicit generalized rea
+soning in LLMs. We find that our approach
+not only provides a better comparison between
+LLMs, but also induces better intermediate
+traces in models compared to the standard QA
+paradigm. We empirically verify this behav
+ior on diverse reasoning and knowledge-heavy
+QA datasets by comparing LLMs of varying
+sizes and families. Our approach narrows the
+performance gap observed in the standard QA
+evaluation settings, indicating that the prevalent
+indirect QA paradigm of evaluation overesti
+mates the differences in performance between
+models. We further validate our findings by
+extensive ablation studies
+
+1 Introduction
+
+While general-purpose LLMs have become ubiqui
+
+tous today, evaluating them holistically remains
+a massive challenge. Primarily, these models
+
+are compared against each other by their per
+
+formance on a handful of benchmark tasks and
+
+datasets (Liang et al., 2023; Srivastava et al
+2023; Wang et al., 2019; Sarlin et al., 2020) dom
+
+inated by various kinds of question-answering
+
+tasks (Hendrycks et al., 2021; Lin et al., 2022
+
+Rajpurkar et al., 2016; Rein et al., 2023). While
+objective and scalable, to estimate the underlying
+
+problem-solving capabilities of models, this ap
+
+proach 1s indirect — merely judging a model on its
+
+ability to pick the correct choice among distrac
+tors or to produce a correct numerical answer to a
+mathematical problem doesn’t measure the qual
+ity of strategies these models use to arrive at that
+answer. There is a pressing need (Alzahrani et al
+2024; Gan et al., 2024; Li et al., 2024b) for direct
+evaluation of problem-solving capabilities as they
+are better aligned to the actual use-cases of LLMs
+For example, while the GPQA dataset (Rein et al
+2023) contains multiple-choice questions (MCQs)
+that indirectly test the graduate-level knowledge of
+the models, the corresponding real-world use-case
+is more subjective — the model should possess the
+ability to have an accurate open-ended conversa
+tion with the user about advanced concepts. This
+ability is better reflected in the strategies that the
+LLM uses to answer GPQA questions. Hence, the
+focus of this paper is to directly evaluate the inter
+nal problem-solving capabilities of the models in a
+holistic, yet scalable and generalizable manner
+We propose an evaluation framework called cas
+caded information disclosure which focuses on elic
+iting and estimating the problem-solving capabili
+ties reflected in the intermediate traces of the mod
+els. It involves modification of standard QA tasks
+as follows. We first transform the question into its
+more generalized form and then design a scheme
+to partition this form into non-overlapping parts
+Then we disclose these parts to the model under
+evaluation in a stagewise manner. While this frame
+work accommodates multiple stages/parts, the final
+stage in all instantiations is a verifiable projection
+stage that projects the model’s responses in the
+earlier stages to an automatically evaluatable/veri
+fable form. This progressive question disclosure
+leads to a more accurate assessment of the sub
+jective problem-solving capabilities of the models
+while the verifiable projection stage maintains the
+scalability and automation of evaluation. We instan
+tiate this framework for two distinct QA modes: 1)
+multiple-choice QA, and 11) reasoning-based math
+
+--- Page 2 ---
+Q Stem: A small iron block is
+dropped from a height of 30m
+What is its velocity at 10m?
+Options
+
+) (> 10 m/s) and (< 12m/s)
+B) (> 19m/s) and (< 21m/s)
+
+) (> 49 km/hr) and (< 51 km/
+
+or ease of com
+satisfies stage-1 answer. <\ Pro
+
+ar nk>
+
+<Projected Answer>A<\Projected
+
+<Judge think>..Stage-1a            ect
+necause  e you need the kn  — oe  / i  an
+to answe r<\dudge think>
+
+Face  Answer>Cor
+
+ect<\Judge Answer>
+
+Figure 1: Demonstration of MCQA instantiation of our Cascaded Information Disclosure evaluation framework
+against Standard evaluation and LLM-based Subjective evaluation of problem-solving capabilities. The standard
+evaluation paradigm picks the correct option but has poor justification for the answer. Cascaded Information
+Disclosure strategically generalizes the question and exposes parts of it to the model in a stagewise manner. The
+free-form response generated during ideation phase reflects model’s poor problem-solving ability. LLM-based
+
+subjective evaluation is an appealing alternative to judge the ideated response but fails in the example shown
+it supports the trivial conclusion in the incorrect ideation. Verifiable Projection while objective and automatic,
+correctly penalizes the incorrect ideated response by picking the wrong option
+
+word problems
+Comparing a wide variety of models of different
+sizes and families (§ 3.1), our approach narrows the
+
+performance gap observed in the standard evalua
+
+tion settings, indicating that the prevalent indirect
+evaluation paradigm overestimates the differences
+in performance between models. Overall, we find
+
+that our approach not only provides a better esti
+
+mate of LLMs’ underlying reasoning capabilities
+but also elicits better performance and intermediate
+traces from the models compared to the standard
+
+QA paradigm — an effect primarily driven by the de
+
+composition of the questions into separate foci. We
+further validate the soundness of our observations
+by extensive ablation studies
+
+To summarize, we 1) propose a novel generalized
+framework to test the problem-solving capabilities
+of LLMs that supports automation and extensibility,
+11) empirically study our framework via concrete
+automatic instantiations across multiple QA tasks
+and LLMs, and 111) create manual instantiations of
+this framework by annotating two datasets that will
+be publicly available
+
+2 Cascaded Information Disclosure
+
+The central guiding conjecture (Wood et al., 1976
+Collins and Stevens, 1983) behind our approach
+
+is that an answerer (human or machine) will em
+ploy more detailed reasoning and knowledge-based
+strategies and reveal more information in their an
+swers if the question is broken down into a series
+of leading questions. Therefore, our approach in
+volves exposing partial information about the ques
+tion to the answerer model in a cascade of stages
+and eliciting potentially detailed and meaningful re
+sponses from it at each stage. More concretely, the
+input question @ is first converted into an abstract
+form (. The abstract question is then decomposed
+into n non-overlapping subsets Q    U1 Q;. Our
+approach then solicits responses /; from the model
+by presenting these subsets in a predetermined or
+der and conditioning each response on the corre
+sponding subset and the response in the previous
+stage: R; ~ Q;, R;_1. The response of the final
+stage 1s considered to be a model’s answer to
+the full question: A(Q) = Ry | Qn, Rn—1. Cru
+cially, the response at any tae doesn’t explicitly
+depend on the subparts of the question at the ear
+lier stages — the only information the model can
+gather about the previous stages is through the re
+sponse generated one stage prior. This promotes
+detailed and informative responses from the model
+at each stage which, as we show in our results
+is the primary driver for eliciting better problem
+solving strategies from the models. An appropriate
+
+--- Page 3 ---
+decomposition procedure underpins the success of
+our approach and needs to be custom-designed for
+every instantiation of this abstract framework
+
+In our experiments, we instantiate this frame
+work for two different types of questions: multiple
+
+choice questions, and math word problems. While
+the instantiations are procedurally different, there
+
+are some commonalities between the two instantia
+
+tions. Both of them decompose the question into
+two stages (n=2) that we call generalized ideation
+and verifiable projection stages. The generalized
+ideation stage presents a partial generalized view
+of the original question to the model such that the
+
+model generates a broad and general response 1
+
+The verifiable projection stage takes this response
+
+along with the rest of the information in the orig
+
+inal question (question residue) to project Ry to
+
+an objectively measurable answer format. There
+
+fore, the generalized ideation stage produces the
+subjective response detailing the problem-solving
+
+strategies employed by the models, and the veri
+
+fiable projection stage ensures that the evaluation
+remains automatic and scalable by using standard
+evaluation metrics for the projected response
+
+2.1 MCQA Instantiation
+
+We break the MCQ into two parts: the question
+
+stem, and the options containing the answer. There
+
+fore, the generalized ideation stage only gets to
+look at the general question without the knowledge
+of the answer candidate and induces the model
+
+to produce a detailed constructed response (Liv
+ingston, 2009) to answer the question in a free
+
+form subjective manner. This response is then
+
+passed, along with only the candidate options
+to the verifiable projection stage. This stage as
+
+sesses the model’s free-form response and picks
+the option that most appropriately matches the
+response. We conduct experiments on different
+MCQA datasets designed to test for reasoning and
+advanced graduate-level knowledge
+
+2.2 Math Word Problem Instantiation
+
+The original math word problems are rewritten into
+a templated form that is more general and specific
+entities are replaced by abstract variables. This
+generalized question is presented to the model in
+ideation stage in which the only correct way to
+
+answer the question is to reason about the prob
+
+lem and unknown variables, and produce a general
+
+mathematical formula for the generalized question
+
+The verifiable projection stage takes the ideation
+
+response and the variable assignment as input. The
+mathematical formula is turned into executable
+code that accepts the variable assignments as ar
+guments to yield a numeric answer to the origi
+nal question. This instantiation requires consider
+able manual intervention. Therefore, we use the
+GSMS8&K (Cobbe et al., 2021) dataset for original
+questions whose generalized form is constructed us
+ing templates in prior work (Mirzadeh et al., 2024)
+
+3 Experimental Setup
+
+We empirically compare the effectiveness of the
+cascaded information disclosure evaluation frame
+work against other prevalent frameworks by eval
+uating a variety of open-weight models span
+ning various sizes (7B to 32B) and model families
+(Llama (Grattafiori et al., 2024), Qwen (Qwen et al.,
+2025), Gemma (Team et al., 2024), and Phi (Abdin
+et al., 2024)). Specifically, we use the instruction
+finetuned checkpoints for the models that are capa
+ble of following instruction prompts in a zero-shot
+QA setting. (Details in Appendix)
+
+Datasets: As described in§ 2, we instantiate our
+cascaded information disclosure framework for
+problem-solving evaluation for two types of ques
+tions: MCQs and math word problems. For the
+MCQA format, we picked a) the test split of ARC
+Challenge (Clark et al., 2018) dataset which con
+sists of grade school level science questions for
+MCQA format and, b) the GPQA dataset which
+consists of challenging graduate-level science ques
+tions written by domain experts. Specifically
+we use the high-quality subset of the full GPQA
+dataset: GPQA-Main (448 questions), and its more
+challenging subset GPQA-Diamond (198 ques
+tions). It is reported in the GPQA paper (Rein et al.,
+2023) that highly skilled non-expert human valida
+tors only reach 30.4% and 22.1% accuracies on
+GPQA-Main and GPQA-Diamond despite spend
+ing on average over 30 minutes with unrestricted
+access to the internet. For math word problems
+we use GSM8K to obtain original questions. Previ
+ous work Mirzadeh et al. (2024) created 100 sym
+bolic templates from 100 questions in the original
+GSMS8K dataset by manually annotating the enti
+ties (numeric values and categorical values) that
+can be abstracted into variables. We extend these
+templates by creating consistent assignments to the
+variables in the templates, resulting 1n a derivative
+dataset we call GSM-General' consisting of 100
+
+'We will make this converted symbolic version of GSM8K
+
+--- Page 4 ---
+template-variable assignment pairs that map to the
+100 original questions in GSM8K dataset
+
+Inference Details: For prompt engineering, we
+adopt zero-shot, chain-of-thought prompting (Wei
+et al., 2023) to mimic the most common real-world
+LLM use case. Prompt templates are available in
+appendix 7.2. We specifically crafted the prompts
+for all the settings including the baseline methods
+so as to achieve maximal performance on the tasks
+under each method. Specifically, we found that
+
+describing our cascaded setup for question disclo
+
+sure to the models via the prompt resulted in stable
+behavior under our approach. We use XML tags
+based answer format in both prompting and answer
+
+extraction. We use greedy decoding which is the de
+
+fault setting for all three selected datasets. For each
+model, we set the context length to the maximum
+supported by the model and we set a uniform cap
+of 8192 for maximum number of generated tokens
+to facilitate a fair comparison across models
+
+3.1 Evaluation Strategies Compared
+3.1.1 Standard Evaluation
+
+This evaluation setting is the most widely used
+
+evaluation method for the datasets we work with
+
+We further enhanced the standard evaluation by
+
+developing custom prompts and answer extrac
+
+tion methods to ensure maximal performance on
+the datasets that would serve as difficult baselines
+for our approach to beat. For MCQA type, the
+models take in the full original question: stem
+(What is Newton’s Third Law of Motion
+
+about?) and candidate options (A: Inertia, B
+Force and acceleration, C: Momentum, D
+Action-Reaction) as inputs, and provide a re
+sponse from which the answer index (A, B, C,
+
+or D) is extracted.”
+
+A math word problem is a mathematical exer
+cise presented as a scenario, requiring the applica
+
+tion of mathematical reasoning and computation
+to solve a real-world or hypothetical situation and
+provide a numerical answer. For evaluation, the
+prompt contains requirements on the format of the
+
+final answer. We use Im-evaluation-harness’s 1m
+
+plementation to evaluate models’ performance on
+
+dataset, GSM-General publicly available
+
+*We use two implementations of standard MCQA base
+
+lines: LM Evaluation Harness ((Gao et al., 2024); denoted
+“LMH”) and a custom implementation. We found that LMH’s
+simple prompts and answer extractions led to high parsing
+
+failure rate. To provide a fairer comparison of model perfor
+
+mance, we develop an advanced MCQA baseline that greatly
+improves model’s instruction following on formatting
+
+the 100 original GSM8K questions
+
+3.1.2 Cascaded Information Disclosure
+
+As described above, we instantiate both the ques
+tion types with two stages: generalized ideation and
+verifiable projection. In the generalized ideation
+stage, we break the original question (or its trans
+formed abstract form) into a generalized question
+and question residue. In the MCQA setting, we
+construct the generalized question by concealing
+the options, which will then be used as question
+residue in the subsequent stage. As discussed in
+§ 4.5, we also experiment with obtaining the gener
+alized question by concealing the options and man
+ually rewriting the question stem to make it option
+independent and general. In math word problem
+setting, we construct the generalized question by
+converting the original question into its symbolic
+form that replaces entities and quantities in the orig
+inal question with abstract variables, leaving the
+value assignment to the variables involved as the
+question residue. In the prompt for generalized
+ideation stage, we explicitly specify that reiteration
+of the question is prohibited to restrict its leakage
+into the next stage
+
+In the verifiable projection stage, we project the
+generalized reasoning traces in the ideation stage
+to either an option in MCQA or a numeric result
+in math word problem through a projector. The
+projector for MCQA tasks is an LLM whose task
+is to pick the most relevant option based solely on
+evaluation subject’s ideation stage traces (no ac
+cess to generalized question). We also explicitly
+instruct the projector LLM to abstain from solving
+the original problem and only focus on matching to
+the correct option to ensure that the accuracy on an
+swers predicted by the projector provides a reliable
+estimate of the quality of the open-ended reason
+ing trace generated in the ideation stage. Similarly,
+the projector for the math word problem is only
+provided the trace from the ideation stage and is
+tasked with producing an executable Pythonic ex
+pression of the logic and formula expressed in the
+ideation stage. This code is then executed with
+the variable values to verify the correctness of the
+answer produced. We experiment with different
+kinds of projectors: a) the LLM being evaluated
+as the projector (self), b) an external performant
+open-weight projector (model Phi), c) a blackbox
+frontier projector model GPT-40 (OpenAI et al
+2024), and d) a rule-based projector that doesn’t
+use any LLMs. For rule-based substitute of LLM
+
+--- Page 5 ---
+projector in MCQA, we implement a sentence-level
+BLEU score metric (Post, 2018) for matching the
+first stage traces to the ground-truth answer. In the
+math word problem setting, we implement a func
+tion that extracts the expression stated in answer
+tags from the ideation stage output. If executable
+this expression is used to produce the answer by
+filling variable values from the question residue
+
+3.1.3 Subjective evaluation of Generalized
+Ideation Traces
+
+While verifiable projection stage makes our ap
+proach automatic and reliable, it is not the only pos
+sible automatic approach to evaluate the problem
+solving capabilities of the model elicited in the gen
+eralized ideation stage. We also compare our setup
+against strategies for automatic subjective evalua
+tion of the first stage traces. We experiment with
+LLM-as-Judge projector (Zheng et al., 2023) for
+both MCQA and math word problem settings. The
+LLM judge, armed with the ground truth answer
+is tasked to project the ideation trace to a binary
+verdict "Correct" and "Incorrect"
+
+3.2 Evaluation Metrics
+
+Following the description above, we use the term
+accuracy to refer to two kinds of metrics whose
+usage is differentiated by context: a) objective ac
+curacy, which is a measure of match between the
+ground truth answer and the projected answer, and
+b) subjective accuracy, which is the rate of correct
+ness as judged by an LLM. Thus, the standard
+baselines and systems employing the verifiable
+projector use objective scoring, while LLM-as-a
+judge methods use subjective scoring that decides
+whether the ideation trace is deemed correct or
+not. Subjective accuracy is heavily biased towards
+judge’s style and hence is not directly comparable
+to objective accuracy. We also report the parsing
+failure rate (in Appendix) of answer extraction. The
+failure is caused by the answering model’s inability
+to follow answer formatting instructions
+
+4 Enppirical Analysis
+
+4.1 Cascaded Information Disclosure
+Narrows the Gap between Models
+
+In Table 1, we present accuracies of LLMs eval
+uated on four different benchmark datasets using
+various evaluation paradigms. We report three dif:
+ferent LLM projectors for the verifiable projection
+stage: Phi-4, GPT-40, and ideation model itself
+
+For each evaluation method, we measure perfor
+mance gap as the difference between the highest
+and the lowest scoring model. We observe that
+our approach results in a significantly narrower gap
+between the models compared to the standard eval
+uation. For example, the gap under standard eval
+uation for GPQA-Diamond (37.4) is much higher
+than the gap (12.1) when GPT-4o0 is used as the
+verifying projector. Moreover, the more powerful
+the verifying projector, the lower the performance
+gap. This suggests that the standard evaluation
+scheme prevalent today overestimates the differ
+ence between language model’s capabilities
+
+4.2 Cascaded Information Disclosure
+Kstimates Problem-solving Capability
+
+Generalized questions make QA tasks harder
+The generalized question used in our framework is
+more difficult than the original questions, by their
+nature. For MCQA, the answer choices are omit
+ted in the generalized questions, thereby providing
+the evaluation subjects with strictly less informa
+tion compared to standard evaluation methods. For
+GSM-General, the question is transformed into an
+abstract symbolic question, forcing the models to
+utilize their reasoning capabilities
+
+The increase in difficulty is naturally reflected
+by decrease in performance of larger models (14B+
+parameters) on MCQA tasks in Table | under our
+evaluation paradigm. A qualitative example demon
+strating this is provided as Phi-4’s raw reasoning
+traces under standard MCQA 2 and cascaded in
+formation disclosure 3 for question #996 in ARC
+Challenge dataset. Under standard MCQA setting
+where options are provided, Phi-4 only analyzes the
+four options to get the correct answer whereas in
+our evaluation setting, Phi-4 falsely identified "nu
+cleus" as not being part of the atom during ideation
+and its ideation trace is projected to the Incorrect
+answer by our verifiable projector correctly. The in
+crease in difficulty posed by our framework forces
+models to engage with the task at a deeper level
+thereby contributing to superior evaluation of the
+model’s problem-solving capabilities
+Generalized questions elicit better traces from
+the models: By contrast, we observe the oppo
+site trend for the smaller models (<10B) and the
+GSM8K dataset: the model performance is signifi
+cantly better under our framework with verifiable
+projection than the standard evaluation setting. In
+fact, stronger projectors yields better performance
+This is caused by the improvement in the reasoning
+
+--- Page 6 ---
+Table 1: Comparison of Cascaded Information Disclosure based evaluation with verifiable projector with standard
+(Std.) evaluation. Experiments with three different kinds of projectors are reported: the LM under evaluation (self)
+external open-weight LM (Phi-4), and blackbox frontier model (GPT-40). Performance Gap refers to the difference
+between the best performing model and the worst performing model
+
+Model} | [Projector | [Projector | | Projector _| Projector
+
+Std. Self Phi-4| Std. Self Phi-4 GPT-40| Std. Self Phi-4 GPT-40| Std. Self Phi-4
+
+Llama 3.1-8B |82.5 80.4 87.7 | 20.7 31.8 32.8
+Gemma 2-9B |90.4 84.6 90.1 )30.30 31.3 31.8
+Qwen 2.5-7B | 87.2 82.8 89.0 |32.32 30.3 34.8
+Qwen 2.5-14B /92.1 88.8 90.9 | 41.4 40.4 41.9
+Phi-4 (14B) [95.7 90.8 90.8 | 58.1 51.5 51.5
+
+Perf. Gap A
+
+13.2 10.7 5.2 | 37.4 21.2 19.7
+
+traces generated by the models under our evaluation
+framework, as we observe from manual inspection
+In one of the GSM8K outputs (Listing 1), we ob
+serve that the Gemma-9B’s outputs are incoherent
+past the third sentence for the standard evaluation
+method. In contrast, the reasoning traces for the
+projector method are semantically coherent, laying
+out each step coherently and explicitly. We observe
+similar behavior for GPQA outputs. In the standard
+evaluation method (Listing 4), Qwen-7B’s reason
+ing traces for a quantum mechanics problem are
+correct up to the middle, after which it hallucinates
+its expression to match one of the provided answer
+choices. For the projection method (Listing 5), the
+model generates a correct reasoning trace from start
+to finish, without any hallucinations
+
+Our framework elicits higher quality traces from
+the model, thereby providing a more faithful esti
+mation of its problem-solving capability
+
+4.3 Separation of Concerns Improves
+Instruction Following Quality
+
+Recent work on RLVF has shown that improve
+ments in MCQA are often driven not by enhanced
+reasoning, but by better output formatting capa
+bilities introduced via fine-tuning or reinforcement
+learning (Shao et al., 2025). This suggests that stan
+dard evaluations underestimate models’ problem
+solving abilities due to brittle evaluation pipelines
+that rely on rigid regex-based answer extraction
+
+To quantify the effect of formatting issues, we com
+pare parsing failure rates (full table in Appendix
+Table 9) between our two-stage method with Phi-4
+as the final projector and the standard evaluation
+paradigm. For standard evaluation paradigm, we
+compare three systems: LMH (widely used LM
+
+23.7 28.3 33.0
+32.4 30.6 32.6
+31.0 31.9 30.1
+38.2 36.2 37.7
+52.9 45.3 45.3
+43.1 41.5 40.8
+29.2 16.9 15.2
+
+evaluation harness), LMH+ (LM evaluation harness
+augmented with additional formatting and parsing
+instructions), and custom prompting that we de
+signed specifically for the standard MCQA setup
+3.1. We observed that LMH and LMH+ evalua
+tion setups are completely unsuitable for the Phi-4
+model (parsing failure rate of 90%+ on GPQA)
+This is because Im-evaluation-harness evaluation
+system doesn’t apply any chat template even for
+instruction-finetuned models and Phi-4 tends to
+produce empty output when the input is not aligned
+with its prompt template. In general, we observe
+that the standard widely used LMH system suffers
+from high answer parsing error rates for a major
+ity of our models: upwards of 40% and 30% for
+Gemma2-9B and the Llama3.1-8B models, and
+around 2-5% for the Qwen models. LMH+ reduces
+these failure rates but they remain significantly high
+for the Llama and Gemma models (15-20%). This
+indicates that models struggle to adhere to the im
+plicit formatting assumptions of the lm-evaluation
+harness framework. Our custom standard method
+which applies correct chat template for each model
+via careful prompt engineering and answer extrac
+tion strategies detailed in 3.1 further reduces pars
+ing failures to below 10% for most models except
+the Llama model, possibly because of length issues
+
+Contrastingly, our evaluation setting achieves
+zero parsing failures across all models. This is
+expected — decomposition of the answering mech
+anism into ideation and projection stages enables
+disentangled focus on each stage leading to greater
+format adherence. More importantly, the reduction
+(or elimination) of formatting issues with custom
+standard and our approach indicates that the perfor
+mance trends in Table | are an accurate reflection
+
+--- Page 7 ---
+the models’ performance on QA tasks, having ac
+
+counted for a commonly observed confounding
+factor related to formatting
+
+4.4 Oracle for Generalized Ideation
+
+We evaluate the quality of two projection strategies
+
+in our framework: a) LLM-judge projector, b) veri
+
+fiable projector. Specifically for GPQA, we bypass
+
+the LLM-based ideation stage and instead use hu
+
+man expert-written explanations as inputs to the
+projection stage. These explanations are provided
+by the expert annotators and are included as part of
+
+the GPQA dataset. Thus, in this setting the LLM
+
+judge projector should score 100% because all the
+
+explanations are correct by design. Also, a high
+
+quality verifiable-projector should always pick the
+
+correct option congruent with the ground-truth ex
+planation. The judge setting in Table 2 assumes ac
+
+Table 2: Results of subjective projection using LLM
+
+as-judge (Judge) and verifiable projection (Verify) of
+
+oracle generalized ideation on GPQA-Main. Differ
+
+ent projector LLMs are compared: Llama 3.1-8B(L)
+Gemma 2-9B (G), Qwen 2.5 models (Q-7B, Q-14B
+Q-32B), and Phi-4 (P)
+
+Judge 65.6 95.3 70.1 92.4 97.3 93.1
+
+Verify 95.8 95.5 97.8 99.1 98.2 99.3
+
+cess to additional knowledge of the correct answer
+to the original question to subjectively evaluate
+the oracle. We see that the judge performs poorly
+for several LMs (It 1s even poorer when it doesn’t
+have access to original question’s answer — full
+
+table: Appendix table 8). This indicates that sub
+
+jective evaluation techniques like LLM-as-a-judge
+
+do not faithfully reflect the assessment of problem
+
+solving capabilities of models. Similar concerns
+about this evaluation paradigm have been raised in
+prior work (Panickssery et al., 2024; Zheng et al
+2023; Dubois et al., 2025; Zhu et al., 2025; Li et al.,
+2023; Manakul et al., 2023; Doddapaneni et al
+2024). In contrast, the verifiable projector achieves
+near-perfect accuracy across all models, reaching
+over 99% in several cases. This validates the cor
+rectness of our verifiable projection approach as it
+behaves almost flawlessly with oracle generalized
+ideation
+
+4.5 Scalability of Our MCQA Instantiation
+
+One potential concern in our implementation of
+MCQA instantiation of cascaded information dis
+
+7
+
+closure framework is that some multiple-choice
+questions may not be fully self-contained once
+the candidate options are removed. Therefore, for
+challenging GPQA-Diamond questions, we pro
+jected the original MCQ (Q) to a modified abstract
+form (Q) by manually annotating the question
+stems such that they are self-contained. Table 3
+shows the difference between performance under
+our evaluation approach with Phi-4 as the projector
+on the annotated dataset and the unmodified dataset
+We only notice small differences in either direction
+across LLMs. These results indicate that manual
+annotation is not necessary for effective cascaded
+information disclosure evaluation. This finding re
+inforces the practical scalability of our approach
+allowing researchers to repurpose existing MCQA
+datasets for improved evaluation without incurring
+significant human annotation costs
+
+Table 3: Performance difference (A) between two strate
+gies for generalized question generation for MCQA: a)
+converting GPQA-diamond question stems to be self.
+contained, and b) using the original question stems
+These questions are input to the ideation stage with
+different LLMs: Llama 3.1-8B(L), Gemma 2-9B(G)
+Qwen 2.5 models(Q-7B, Q-14B, Q-32B), and Phi-4(P)
+
+Annot.-A 0.0 3.5 -2.0  5.6 3.5 -1.0
+
+4.6 Effect of varying projector LLM
+
+Table 4: Performance Gap between the highest scoring
+projector LLM and the lowest scoring projector LLM
+for both subjective projector (Ajudge) and verifiable pro
+jector (Averiry) settings on ARC-challenge (A), GPQA
+main (M) and diamond (D) datasets. The ideation stage
+is reported under different LLMs: Llama 3.1-8B(L)
+Gemma 2-9B (G), Qwen 2.5 models (Q-7B, Q-14B
+Q-32B), and Phi-4 (P)
+
+Ajudge (M) 9.6 27.0 12.7) 19.9 16.7 18.3
+Averity(M) 4.7 3.1 2.2 36 58 42
+Ajudee(D) 11.6 23.7 12.1 19.19 15.1 17.7
+
+Averity(D) 2.0 66 81 10.1 7.1 7.6
+Ajudge(A) 18.3 31.9 15.5 11.5 82 9.8
+
+Averity(A) 7.3 76 69 67 69 6.6
+We have shown in 4.4 that verifiable projec
+tors consistently outperform subjective projectors
+when ground truth explanations are used as ideation
+traces. To further compare the robustness of sub
+jective and verifiable projectors, we compute the
+
+--- Page 8 ---
+accuracy gap between the best projector and the
+worst projector when different LLM projectors are
+used to score the ideation traces from the same
+models. From the results table 4 we can see that
+
+this gap is consistently larger for subjective pro
+
+jectors than verifiable projectors. In some cases
+LLM-as-a-Judge based projector performance gap
+is almost 7 times of verifiable projector, signaling
+extreme instability of the subjective projectors
+
+4.7 Why LLMs for Verifiable Projection?
+
+Table 5: Performance difference (A) between two verifi
+
+able projection strategies: a) using an LLM and, b) using
+
+a rigid rule-based system. The ideation stage is pro
+duced by different LLMs: Llama 3.1-8B(L), Gemma 2
+
+9B (G), Qwen 2.5 models (Q-7B, Q-14B, Q-32B), and
+Phi-4 (P), on MCQA (GPQA) diamond and math word
+problem (GSM)8K-100 datasets
+
+GPQA A 12.1 -1.0 6.1  6.6 17.2 11.62
+GSMA 12 15 22  9  0  0
+
+Since the verifier projection stage maps the ideation
+stage output to an objective answer, it is possible
+to build simple heuristics for this stage instead of
+using an LLM as a projector. For MCQA, the
+
+rule-based projector selects the option that maxi
+mizes sentenceBLEU with the ideated response
+
+For GSM8K, we extract a pythonic expression
+if available from the tail of the ideated response
+and execute it for evaluation. Table 5 compares
+
+LLM-based projector (Phi-4) to rule-based projec
+
+tors designed by us (full table in Appendix Table
+11). Across almost all models and datasets, the
+LLM projector substantially outperforms (+ A) the
+symbolic baseline. Thus, rigid rule-based systems
+are insufficient for reliable projection, particularly
+
+in tasks requiring nuanced reasoning alignment
+
+On the other hand, this projection task is simple
+enough for LLM projectors as shown in § 4.4
+
+4.8 Is It Just Inference-time Scaling?
+
+Because, our framework involves more computa
+
+tion steps due to its stagewise nature, in Table 6
+we compare it (Self as a verifier projector) to a
+
+two-round version of the standard evaluation set
+ting (self-reflect). This setting performs the stan
+
+dard QA twice, with the second round also using
+the model’s response from the first round. We find
+that self-reflect behaves in an opposite manner to
+our framework — it hurts the performance on the
+
+small models and doesn’t affect the performance
+of larger models, thereby increasing the perfor
+mance gap between the models. This suggests that
+cascaded information disclosure performance isn’t
+merely an artifact of inference-time scaling
+
+Table 6: Performance gap between Increased-compute
+and Standard settings. Two methods of increasing com
+pute are compared: a) cascaded info disclosure with
+the ideation LLM as verifiable projector (Agus), and
+b) self-reflection (Ajyefect) on GPQA-Main (M) and Dia
+mond (D). The ideation stage is reported under different
+LLMs: Llama 3.1-8B(L), Gemma 2-9B (G), Qwen 2.5
+models (Q-7B, Q-14B, Q-32B), and Phi-4 (P)
+
+Aours (M) 4.7. -1.8 0.9
+Arefiect (M) -4.9 0.4  -0.7
+
+Aours (D) 11.1 1.0 -2.0
+Areflect (D) -2.5 -1.5 -1.0
+
+5 Discussion
+
+Similar to our instantiation, prior work has ex
+plored transforming extant benchmarks for better
+evaluation. This transformation includes permu
+tation of answer choices (Gao et al., 2024), aug
+menting an additional choice (Wang et al., 2024)
+removing questions from the problem statement
+(Balepur et al., 2024), adversarial perturbations of
+problem statements (Li et al., 2024a; Wang et al
+2022),translating the questions into another natu
+ral language (Yue et al., 2023), formal language
+(Tsoukalas et al., 2024), and programming lan
+guage (Zheng et al., 2024), among others. Another
+popular transformation for MCQA is randomly re
+placing the answer choices with None of the
+other choices (Balepur et al., 2025; Livingston
+2009) We also conducted experiments with this
+transformation (Appendix Table 7a) and observed
+that this further shrinks the gap between the models
+as it makes the questions more difficult. Such trans
+formations are complementary to our findings and
+can be seamlessly integrated into our framework
+Finally, our evaluation framework is general and
+capable of encompassing multiple stages with dis
+tinct foci. Our observation that our multi-stage
+setup elicits improved intermediate traces suggests
+a fruitful future direction for learning the decom
+position (Prasad et al., 2024; Renze and Guven
+2024) and nature of stages for enhanced problem
+solving behavior via Reinforcement Learning (RL)
+(DeepSeek-AI et al., 2025; Wen et al., 2025)
+
+--- Page 9 ---
+6 Limitations
+
+Although our proposed method provides a more
+
+robust evaluation of a model’s reasoning capabil
+
+ities, it requires some additional compute to run
+
+the LLM-based projector. Relatedly, our frame
+
+work could be extended with recent orthogonal
+
+approaches for inference-time scaling (Wang et al.,
+
+2023), (Madaan et al., 2023), (Snell et al., 2024
+Tian et al., 2025). In this work, we focus on a
+structured and efficient multi-round paradigm that
+avoids redundant computation
+
+Furthermore, we restricted our attention to
+MCQA and math word problems in this paper. We
+did not evaluate on many other tasks of interest
+
+to the LLM community, such as machine transla
+
+tion. While our framework is general enough to
+accommodate multiple tasks and stages, for some
+of these cases, formulation and implementation
+may be nontrivial when instantiating our cascading
+
+information disclosure framework. For example
+
+some of these cases might require annotating the
+
+dataset as in our GSM-General (although this pro
+
+cess could be automated using an LLM)
+
+References
+
+Marah Abdin, Jyoti Aneja, Harkirat Behl, Sébastien
+Bubeck, Ronen Eldan, Suriya Gunasekar, Michael
+Harrison, Russell J. Hewett, Mojan Javaheripi, Piero
+
+Kauffmann, James R. Lee, Yin Tat Lee, Yuanzhi Li
+Weishung Liu, Caio C. T. Mendes, Anh Nguyen
+
+Eric Price, Gustavo de Rosa, Olli Saarikivi, and
+
+8 others. 2024. Phi-4 technical report. Preprint
+
+arX1v:2412.08905
+
+Norah Alzahrani, Hisham Abdullah Alyahya, Yazeed
+
+Alnumay, Sultan Alrashed, Shaykhah Alsubaie
+Yusef Almushaykeh, Faisal Mirza, Nouf Alotaibi
+Nora Altwairesh, Areeb Alowisheq, M Saiful Bari
+and Haidar Khan. 2024. When benchmarks are tar
+
+gets: Revealing the sensitivity of large language
+model leaderboards. Preprint, arXiv:2402.01781
+
+Nishant Balepur, Abhilasha Ravichander, and Rachel
+Rudinger. 2024. Artifacts or abduction: How do
+IlIms answer multiple-choice questions without the
+question? Preprint, arXiv:2402.12483
+
+Nishant Balepur, Rachel Rudinger, and Jordan Lee
+Boyd-Graber. 2025. Which of these best describes
+multiple choice evaluation with Ilms? a) forced
+
+b) flawed c) fixable d) all of the above. Preprint
+
+arX1v:2502.14127
+
+Peter Clark, Isaac Cowhey, Oren Etzioni, Tushar Khot
+
+Ashish Sabharwal, Carissa Schoenick, and Oyvind
+Tafjord. 2018. Think you have solved question
+
+answering? try arc, the ai2 reasoning challenge
+Preprint, arXiv:1803.05457
+
+Karl Cobbe, Vineet Kosaraju, Mohammad Bavarian
+Mark Chen, Heewoo Jun, Lukasz Kaiser, Matthias
+Plappert, Jerry Tworek, Jacob Hilton, Retichiro
+Nakano, Christopher Hesse, and John Schulman
+2021. Training verifiers to solve math word prob
+lems. Preprint, arXiv:2110.14168
+
+Allan M Collins and Albert L Stevens. 1983. A cogni
+tive theory of interactive teaching. Technical report
+
+DeepSeek-AI, Daya Guo, Dejian Yang, Haowei Zhang
+Junxiao Song, Ruoyu Zhang, Runxin Xu, Qihao Zhu
+Shirong Ma, Peiyi Wang, Xiao Bi, Xiaokang Zhang
+Xingkai Yu, Yu Wu, Z. F. Wu, Zhibin Gou, Zhi
+hong Shao, Zhuoshu Li, Ziyi Gao, and 181 others
+2025. Deepseek-rl: Incentivizing reasoning capa
+bility in Ilms via reinforcement learning. Preprint
+arXiv:2501.12948
+
+Sumanth Doddapaneni, Mohammed Safi Ur Rahman
+Khan, Sshubam Verma, and Mitesh M. Khapra. 2024
+Finding blind spots in evaluator Ilms with inter
+pretable checklists. Preprint, arXiv:2406.13439
+
+Yann Dubois, Balazs Galambosi, Percy Liang, and Tat
+sunori B. Hashimoto. 2025. Length-controlled al
+pacaeval: A simple way to debias automatic evalua
+tors. Preprint, arX1v:2404.04475
+
+Esther Gan, Yiran Zhao, Liying Cheng, Yancan Mao
+Anirudh Goyal, Kenji Kawaguchi, Min-Yen Kan
+and Michael Shieh. 2024. Reasoning robustness of
+IlIms to adversarial typographical errors. Preprint
+arX1iv:2411.05345
+
+Leo Gao, Jonathan Tow, Baber Abbasi, Stella Bider
+man, Sid Black, Anthony DiPofi, Charles Foster
+Laurence Golding, Jeffrey Hsu, Alain Le Noac’h
+Haonan Li, Kyle McDonell, Niklas Muennighoff
+Chris Ociepa, Jason Phang, Laria Reynolds, Hailey
+Schoelkopf, Aviya Skowron, Lintang Sutawika, and
+5 others. 2024. The language model evaluation har
+ness
+
+Aaron Grattafiori, Abhimanyu Dubey, Abhinav Jauhri
+Abhinav Pandey, Abhishek Kadian, Ahmad AI
+Dahle, Aiesha Letman, Akhil Mathur, Alan Schel
+ten, Alex Vaughan, Amy Yang, Angela Fan, Anirudh
+Goyal, Anthony Hartshorn, Aobo Yang, Archi Mi
+tra, Archie Sravankumar, Artem Korenev, Arthur
+Hinsvark, and 542 others. 2024. The llama 3 herd of
+models. Preprint, arXiv:2407.21783
+
+Dan Hendrycks, Collin Burns, Steven Basart, Andy Zou
+Mantas Mazeika, Dawn Song, and Jacob Steinhardt
+2021. Measuring massive multitask language under
+standing. Preprint, arXiv:2009.03300
+
+Junyi Li, Xiaoxue Cheng, Wayne Xin Zhao, Jian- Yun
+Nie, and Ji-Rong Wen. 2023. Halueval: A large
+scale hallucination evaluation benchmark for large
+language models. Preprint, arXiv:2305.11747
+
+--- Page 10 ---
+Qintong Li, Leyang Cui, Xueliang Zhao, Lingpeng
+Kong, and Wei Bi. 2024a. Gsm-plus: A compre
+hensive benchmark for evaluating the robustness of
+Ilms as mathematical problem solvers. Preprint
+arX1v:2402.19255
+
+Yucheng Li, Frank Guerin, and Chenghua Lin. 2024b
+An open source data contamination report for large
+language models. Preprint, arXiv:2310.17589
+
+Percy Liang, Rishi Bommasani, Tony Lee, Dimitris
+Tsipras, Dilara Soylu, Michihiro Yasunaga, Yian
+Zhang, Deepak Narayanan, Yuhuai Wu, Ananya Ku
+mar, Benjamin Newman, Binhang Yuan, Bobby Yan,
+Ce Zhang, Christian Cosgrove, Christopher D. Man
+ning, Christopher Ré, Diana Acosta-Navas, Drew A
+Hudson, and 31 others. 2023. Holistic evaluation of
+language models. Preprint, arXiv:2211.09110
+
+Stephanie Lin, Jacob Hilton, and Owain Evans. 2022
+Truthfulqa: Measuring how models mimic human
+falsehoods. Preprint, arXiv:2109.07958
+
+Samuel A. Livingston. 2009. Constructed-response test
+questions: Why we use them; how we score them
+r&d connections. number 11. Educational Testing
+Service
+
+Aman Madaan, Niket Tandon, Prakhar Gupta, Skyler
+Hallinan, Luyu Gao, Sarah Wiegreffe, Uri Alon
+Nouha Dziri, Shrimai Prabhumoye, Yiming Yang
+Shashank Gupta, Bodhisattwa Prasad Majumder
+Katherine Hermann, Sean Welleck, Amir Yazdan
+bakhsh, and Peter Clark. 2023. Self-refine: It
+erative refinement with self-feedback. Preprint
+arX1iv:2303.17651
+
+Potsawee Manakul, Adian Liusie, and Mark J. F Gales
+2023. Selfcheckgpt: Zero-resource black-box hal
+lucination detection for generative large language
+models. Preprint, arX1iv:2303.08896
+
+Iman Mirzadeh, Keivan Alizadeh, Hooman Shahrokhi,
+Oncel Tuzel, Samy Bengio, and Mehrdad Farajtabar
+2024. Gsm-symbolic: Understanding the limitations
+of mathematical reasoning in large language models
+Preprint, arXiv:2410.05229
+
+OpenAl, :, Aaron Hurst, Adam Lerer, Adam P. Goucher,
+Adam Perelman, Aditya Ramesh, Aidan Clark
+AJ Ostrow, Akila Welihinda, Alan Hayes, Alec
+Radford, Aleksander Madry, Alex Baker-Whitcomb,
+Alex Beutel, Alex Borzunov, Alex Carney, Alex
+Chow, Alex Kirillov, and 401 others. 2024. Gpt-4o
+system card. Preprint, arXiv:2410.21276
+
+Arjun Panickssery, Samuel R. Bowman, and Shi Feng
+2024. Llm evaluators recognize and favor their own
+generations. Preprint, arXiv:2404.13076
+
+Matt Post. 2018. A call for clarity in reporting BLEU
+scores. In Proceedings of the Third Conference on
+Machine Translation: Research Papers, pages 186
+191, Brussels, Belgium. Association for Computa
+tional Linguistics
+
+Archiki Prasad, Alexander Koller, Mareike Hartmann
+Peter Clark, Ashish Sabharwal, Mohit Bansal, and
+Tushar Khot. 2024. Adapt: As-needed decomposi
+tion and planning with language models. Preprint
+arXiv:2311.05772
+
+Qwen, :, An Yang, Baosong Yang, Beichen Zhang
+Binyuan Hui, Bo Zheng, Bowen Yu, Chengyuan
+Li, Dayiheng Liu, Fei Huang, Haoran Wei, Huan
+Lin, Jian Yang, Jianhong Tu, Jianwei Zhang, Jianxin
+Yang, Jiaxi Yang, Jingren Zhou, and 25 oth
+ers. 2025. Qwen2.5 technical report. Preprint
+arXiv:2412.15115
+
+Pranav Rajpurkar, Jian Zhang, Konstantin Lopyrev
+and Percy Liang. 2016. Squad: 100,000+ ques
+tions for machine comprehension of text. Preprint
+arX1v:1606.05250
+
+David Rein, Betty Li Hou, Asa Cooper Stickland
+Jackson Petty, Richard Yuanzhe Pang, Julien Di
+rani, Julian Michael, and Samuel R. Bowman. 2023
+Gpqa: A graduate-level google-proof q&a bench
+mark. Preprint, arXiv:2311.12022
+
+Matthew Renze and Erhan Guven. 2024. The benefits
+of a concise chain of thought on problem-solving in
+large language models. In 2024 2nd International
+Conference on Foundation and Large Language Mod
+els (FLLM), page 476-483. IEEE
+
+Paul-Edouard Sarlin, Daniel DeTone, Tomasz Mal
+isiewicz, and Andrew Rabinovich. 2020. Superglue
+Learning feature matching with graph neural net
+works. Preprint, arXiv:1911.11763
+
+Rulin Shao, Shuyue Stella Li, Rui Xin, Scott Geng
+Yiping Wang, Sewoong Oh, Simon Shaolei Du
+Nathan Lambert, Sewon Min, Ranjay Krishna
+Yulia Tsvetkov, Hannaneh Hajishirzi, Pang Wei
+Koh, and Luke Zettlemoyer. 2025. Spurious re
+wards: Rethinking training signals in rlvr. Preprint,
+arXiv:2506.10947
+
+Charlie Snell, Jaehoon Lee, Kelvin Xu, and Aviral Ku
+mar. 2024. Scaling Ilm test-time compute optimally
+can be more effective than scaling model parameters
+Preprint, arXiv:2408.03314
+
+Aarohi Srivastava, Abhinav Rastogi, Abhishek Rao
+Abu Awal Md Shoeb, Abubakar Abid, Adam Fisch
+Adam R. Brown, Adam Santoro, Aditya Gupta
+Adria Garriga-Alonso, Agnieszka Kluska, Aitor
+Lewkowycz, Akshat Agarwal, Alethea Power, Alex
+Ray, Alex Warstadt, Alexander W. Kocurek, Ali
+Safaya, Ali Tazarv, and 432 others. 2023. Be
+yond the imitation game: Quantifying and extrap
+olating the capabilities of language models. Preprint,
+arX1v:2206.04615
+
+Gemma Team, Morgane Riviere, Shreya Pathak
+Pier Giuseppe Sessa, Cassidy Hardin, Surya Bhupati
+raju, Léonard Hussenot, Thomas Mesnard, Bobak
+Shahriari, Alexandre Ramé, Johan Ferret, Peter Liu,
+Pouya Tafti, Abe Friesen, Michelle Casbon, Sabela
+Ramos, Ravin Kumar, Charline Le Lan, Sammy
+
+--- Page 11 ---
+Jerome, and 179 others. 2024. Gemma 2: Improving
+open language models at a practical size. Preprint,
+arXiv:2408.00118
+
+Xiaoyu Tian, Sitong Zhao, Haotian Wang, Shuaiting
+Chen, Yunjie Ji, Yiping Peng, Han Zhao, and Xian
+gang Li. 2025. Think twice: Enhancing Ilm rea
+soning by scaling multi-round test-time thinking
+Preprint, arXiv:2503.19855
+
+George Tsoukalas, Jasper Lee, John Jennings, Jimmy
+Xin, Michelle Ding, Michael Jennings, Amitayush
+Thakur, and Swarat Chaudhuri. 2024. Putnam
+bench: Evaluating neural theorem-provers on
+the putnam mathematical competition. Preprint,
+arXiv:2407.11214
+
+Alex Wang, Amanpreet Singh, Julian Michael, Felix
+Hill, Omer Levy, and Samuel R. Bowman. 2019
+Glue: A multi-task benchmark and analysis plat
+form for natural language understanding. Preprint,
+arXiv: 1804.07461
+
+Boxin Wang, Chejian Xu, Shuohang Wang, Zhe Gan,
+Yu Cheng, Jianfeng Gao, Ahmed Hassan Awadal
+lah, and Bo Li. 2022. Adversarial glue: A multi
+task benchmark for robustness evaluation of language
+models. Preprint, arXiv:2111.02840
+
+Xuezhi Wang, Jason Wei, Dale Schuurmans, Quoc Le,
+Ed Chi, Sharan Narang, Aakanksha Chowdhery, and
+Denny Zhou. 2023. Self-consistency improves chain
+of thought reasoning in language models. Preprint,
+arXiv:2203.11171
+
+Yubo Wang, Xueguang Ma, Ge Zhang, Yuansheng Ni,
+Abhranil Chandra, Shiguang Guo, Weiming Ren,
+Aaran Arulraj, Xuan He, Ziyan Jiang, Tianle Li, Max
+Ku, Kai Wang, Alex Zhuang, Rongqi Fan, Xiang Yue,
+and Wenhu Chen. 2024. Mmlu-pro: A more robust
+and challenging multi-task language understanding
+benchmark. Preprint, arX1v:2406.01574
+
+Jason Wei, Xuezhi Wang, Dale Schuurmans, Maarten
+Bosma, Brian Ichter, Fei Xia, Ed Chi, Quoc Le, and
+Denny Zhou. 2023. Chain-of-thought prompting elic
+its reasoning in large language models. Preprint,
+arXiv:2201.11903
+
+Xumeng Wen, Zihan Liu, Shun Zheng, Zhijian Xu,
+Shengyu Ye, Zhirong Wu, Xiao Liang, Yang Wang,
+Junjie Li, Ziming Miao, Jiang Bian, and Mao Yang
+2025. Reinforcement learning with verifiable re
+wards implicitly incentivizes correct reasoning in
+base Ilms. Preprint, arXiv:2506.14245
+
+David Wood, Jerome S Bruner, and Gail Ross. 1976
+The role of tutoring in problem solving. Journal of
+child psychology and psychiatry, 17(2):89—100
+
+Xiang Yue, Xingwei Qu, Ge Zhang, Yao Fu, Wen
+hao Huang, Huan Sun, Yu Su, and Wenhu Chen
+2023. Mammoth: Building math generalist mod
+els through hybrid instruction tuning. Preprint,
+arXiv:2309.05653
+
+Lianmin Zheng, Wei-Lin Chiang, Ying Sheng, Siyuan
+Zhuang, Zhanghao Wu, Yonghao Zhuang, Zi Lin,
+Zhuohan Li, Dacheng Li, Eric P. Xing, Hao Zhang,
+Joseph E. Gonzalez, and Ion Stoica. 2023. Judg
+ing Ilm-as-a-judge with mt-bench and chatbot arena
+Preprint, arXiv:2306.05685
+
+Qinkai Zheng, Xiao Xia, Xu Zou, Yuxiao Dong, Shan
+Wang, Yufei Xue, Zihan Wang, Lei Shen, Andi Wang,
+Yang Li, Teng Su, Zhilin Yang, and Jie Tang. 2024
+Codegeex: A pre-trained model for code genera
+tion with multilingual benchmarking on humaneval-x
+Preprint, arXiv:2303.17568
+
+Lianghui Zhu, Xinggang Wang, and Xinlong Wang
+2025. Judgelm: Fine-tuned large language models
+are scalable judges. Preprint, arXiv:2310.17631
+
+--- Page 12 ---
+7 Appendix
+
+--- Page 13 ---
+"original_question”: "Brett is 14 years old. In four years his sister Angela will be
+three times as old as he is now. How old is Angela right now?”,
+"answer_numeric’: 38,
+"generalized_symbolic_question”: "{namel} is {agel} years old. In {years} years his
+{relation_type} {name2} will be {mult} times as old as {namel} is now. How old
+is {name2} right now?\n\nVariables and the range of possible values they can
+
+take are:\n- namel   sample(names_male)\n- name2   sample(names_female)\n
+relation_type   sample(L'sister', 'cousin'])\n- $agel   range(8, 25)\n- $years
+range(2, 10)\n- $mult   range(2, 5)\n\nThe relationship variables should have
+is:\n- agel * mult   years > @\n\n",
+"answer_symbolic”   "agelxmult-years”,
+"jideation_traces”: "<Reasoning>\n1   Let's denote the current age of {name2} as {
+
+age2}.\n2   In {years} years, {namel1} will be {agel} + {years} years old.\n3
+
+In {years} years, {name2} will be {age2} + {years} years old.\n4   We know that
+in {years} years, {name2} will be {mult} times as old as {name1l} is now, so we
+
+can write the equation: {age2} + {years}   {mult} * {agel}\n5   We need to solve
+this equation for {age2}.\n\n</Reasoning >\n<Answer >{ age2 }   {mult} * {agel}   {
+
+years }</Answer>" ,
+
+"raw_symbolic_answer”: "{age2}   {mult} * {agel}   {years}",
+"cleaned_symbolic_answer”: "(mult * agel)   years”,
+
+"projected_numeric_result”: 38,
+
+"Imh_answer_trace”: "We need to figure out how old Angela is right now   We know
+
+that in four years her sister Angela will be three times as old as he is now
+
+We also know that Angela is right now   We need to figure out how old Angela is
+
+right now.\n\n\nLet me know if you have any other questions.<end_of_turn>”,
+"Imh_filtered_answer”: "[Linvalid]”
+
+Listing 1: GSM8K Example. Evaluation subject is Gemma-2-9B
+
+7.1 Qualitative Examples
+7.1.1 Example from GSM8K Dataset
+
+--- Page 14 ---
+"id": "996",
+“question”: "Which of these is not part of an atom?”,
+"options”: [
+
+“isotope”,
+
+“proton”,
+
+“nucleus”,
+
+“electron”
+1 )
+"answer_index”: Q,
+"Phi-4_raw_output”: "<Reasoning>\nTo determine which option is not part of an
+atom, let's analyze each choice:\n\nA) Isotope: An isotope refers to variants of
+
+a particular chemical element that have the same number of protons but
+different numbers of neutrons. Isotopes are not a part of an atom itself; rather
+, they are different forms of atoms of the same element. Therefore, isotopes are
+
+not a component of a single atom.\n\nB) Proton: Protons are positively charged
+particles found in the nucleus of an atom. They are a fundamental part of the
+atom's structure.\n\nC) Nucleus: The nucleus is the central part of an atom,
+containing protons and neutrons. It is a crucial component of the atom.\n\nD)
+Electron: Electrons are negatively charged particles that orbit the nucleus of
+an atom. They are essential parts of the atom's structure.\n\nBased on this
+analysis, the option that is not a part of an atom is A) isotope, as it refers
+to different forms of atoms rather than a component of a single atom. \n</
+Reasoning >\n<PickedAnswer >A</PickedAnswer >” ,
+"is_correct”: "Yes"
+
+Listing 2: ARC-Challenge Example: Phi-4 Correctly Answers Question in Standard MCQA Setting
+
+7.1.2 Example from ARC-Challenge Dataset
+
+--- Page 15 ---
+"id": "996",
+
+"phi-4_ideation_traces”: "To determine which component is not part of an atom, we
+need to understand the basic structure of an atom. An atom is the smallest unit
+of ordinary matter that forms a chemical element. It consists of three primary
+
+subatomic particles:\n\n1l. **xProtons**: These are positively charged particles
+
+found in the nucleus of an atom. The number of protons in the nucleus defines
+
+the atomic number of an element and determines the element's identity.\n\n2. xx
+
+Neutrons**: These are neutral particles, meaning they have no charge, and are
+
+also located in the nucleus alongside protons. Neutrons contribute to the mass
+
+of the atom and can influence the stability of the nucleus.\n\n3. **xElectrons xx
+These are negatively charged particles that orbit the nucleus in various energy
+levels or electron shells. Electrons are much smaller in mass compared to
+
+protons and neutrons and are responsible for the chemical properties of an atom
+\n\nGiven this understanding, any component not fitting into these categories (
+
+protons, neutrons, or electrons) would not be considered part of an atom
+
+Commonly, other particles or structures that are not part of an atom include: \n\
+
+n- xxMoleculesx*: These are groups of two or more atoms bonded together
+
+Molecules are not part of a single atom but rather a collection of atoms.\n\n
+
+zkxkTons**x: These are atoms or molecules that have gained or lost electrons,
+
+resulting in a net charge. While ions are related to atoms, they are not a
+
+fundamental part of an atom's structure.\n\n- **xNucleus**x: While the nucleus is
+
+a part of an atom, it is not a subatomic particle itself but rather a structure
+
+within the atom that contains protons and neutrons.\n\n- **xQuarks**: These are
+
+fundamental particles that make up protons and neutrons. While quarks are part
+of the subatomic particles, they are not considered part of the atom itself in
+the context of basic atomic structure.\n\n- **xPhotons**: These are particles of
+light and do not form part of an atom. They are involved in electromagnetic
+interactions but are not components of atomic structure.\n\nBased on this
+analysis, the correct answer would be a component that does not fit into the
+categories of protons, neutrons, or electrons, such as a molecule, ion, nucleus,
+quark, or photon.”,
+
+"phi-4_ideation_stage_answer”: "A molecule, ion, nucleus, quark, or photon is not
+part of an atom.”,
+"verifiable_projector_raw_output”: "<Reason>\nThe key conclusions from the '
+
+Reasoning Trace' are that an atom consists of three primary subatomic particles
+protons, neutrons, and electrons. Any component that does not fit into these
+categories is not considered part of an atom. The trace specifically identifies
+molecules, ions, the nucleus, quarks, and photons as examples of components that
+are not part of an atom.\n\nNow, let's evaluate each answer option:\n\n- xx
+Option A: protonx**\n    Protons are explicitly mentioned in the reasoning trace
+as a fundamental component of an atom. Therefore, this option does not match the
+conclusion that the component is not part of an atom.\n\n- *xOption B: electron
+za*\N    Electrons are also explicitly mentioned in the reasoning trace as a
+fundamental component of an atom. Thus, this option does not match the
+conclusion that the component is not part of an atom.\n\n- *xOption C: nucleus
+za*\N    The reasoning trace states that the nucleus is not a subatomic particle
+itself but a structure within the atom that contains protons and neutrons
+Therefore, the nucleus is not considered a fundamental component of an atom in
+the context of subatomic particles. This aligns with the conclusion that the
+component is not part of an atom.\n\n- **xOption D: isotopex*x\n    Isotopes are
+variants of a particular chemical element that differ in neutron number. While
+isotopes are related to atoms, they are not a fundamental part of an atom's
+structure. However, the reasoning trace does not explicitly mention isotopes as
+an example of a component not part of an atom. The focus is more on subatomic
+particles and structures like the nucleus.\n\nBased on the analysis, Option C (
+nucleus) is the most consistent and closest match to the reasoning trace, as it
+is explicitly identified as not being a subatomic particle and thus not a
+fundamental component of an atom in the context of the trace.\n</Reason>\n<
+PickedAnswer >C</PickedAnswer >”,
+"projected_answer_text”: "nucleus”,
+"is_anwer_correct”: "No”
+
+Listing 3: ARC-Challenge Example: Phi-4 Fails to Derive the Correct Answer in Cascaded Information Disclosure
+Setting
+
+--- Page 16 ---
+7.1.33 Example from GPQA Dataset
+Qwen2.5-7B’s answer under standard MCQA Evaluation
+
+--- Page 17 ---
+"resps”: "<Reasoning>\nTo solve this problem, we need to understand the
+Kraus representation of a quantum channel and how it relates to the given Kraus
+operators. The Kraus operators \\(A_i\\) for a depolarizing channel are given as
+
+\n\n\\— A_@   \\saqrt{1   \\frac{3p}{4}} I \\J\n\\C A_1   \\sart{\\frac{p}{4}} xX
+\\J\n\\E AL2   \\sart{\\frac{p}{4}} Y \\J\n\\E A_3   \\sart{\\frac{p}{4}} Z
+\\J\n\nThe depolarizing channel can be represented as:\n\n\\L EC\\rho)   \\sum_i
+A_i \\rho A_i*\\dagger \\J\n\nGiven the Kraus operators, we can substitute them
+into the equation:\n\n\\L EC\\rho)   A_®@ \\rho A_@*\\dagger + A_1 \\rho A_1%*\\
+dagger + A_2 \\rho A_2%\\dagger + A_3 \\rho A_3%\\dagger \\]\n\nSince \\(CA_Q
+\\sart {1   \\frac{3p}{4}} I\\), we have:\n\n\\[L A_@ \\rho A_@*\\dagger   (1   \\
+frac{3p}{4}) \\rho \\]\n\nFor the other operators, we have:\n\n\\[L A_1 \\rho A_1
+\\dagger   \\frac{p}{4} X \\rho X \\J\n\\D~ A_2 \\rho A_2*\\dagger   \\frac{p
+{4} Y \\rho Y \\J]\n\\E A_3 \\rho A_3*%\\dagger   \\frac{p}{4} Z \\rho Z \\]\n\
+nCombining these, we get:\n\n\\[L EC\\rho)   (1   \\frac{3p}{4}) \\rho + \\fracf{p
+{4} X \\rho X + \\frac{p}{4} Y \\rho Y + \\frac{p}{4} Z \\rho Z \\J\n\nWe can
+rewrite this as:\n\n\\L E(C\\rho)   (1   \\frac{3p}{4}) \\rho + \\frac{p}{4} (X
+\\rho X + Y \\rho Y + Z \\rho Z) \\J\n\nWe know that \\(X%2   Y*2   Z*2   I\\)
+so:\n\n\\L X \\rho X   \\rho \\J\n\\E Y \\rho Y   \\rho \\J\n\\EL Z \\rho Z   \\
+rho \\J\n\nThus, the expression simplifies to:\n\n\\L EC\\rho)   (1   \\frac{3p
+${4}) \\rho + \\frac{p}{4} C\\rho + \\rho + \\rho)   (1   \\frac{3p}{4}) \\rho +
+\\frac{3p}{4} \\rho   (1   \\frac{3p}{4} + \\frac{3p}{4}) \\rho   (1   p) \\rho
++ \\frac{p}{3} (CX \\rho X + Y \\rho Y + Z \\rho Z) \\J\n\nThis matches the form
+iven in option A.\n\nTherefore, the correct Kraus representation of the state
+\\VCEC\\rho)\\) is:\n\n\\~E EC\\rho)   (1   p) \\rho + \\frac{p}{3} (CX \\rho X + Y
+\\rho Y + Z \\rho Z) \\J\n\n</Reasoning >\n<PickedAnswer >A</PickedAnswer >”
+
+Listing 4: Qwen Custom Example
+
+--- Page 18 ---
+“reasoning”: "To derive the Kraus representation of the depolarizing channel
+operation \( E(\rho) \), we need to ensure that the sum of the squares of the
+Kraus operators equals the identity matrix. The given Kraus operators are:\n\n\L
+
+A_Q   \saqrt{   \frac{3p}{4}} I \IJ\n\E A_1   \sart{\frac{p}{4}} X \J\n\E A_2
+\sart{\frac{p}{4}} Y \J\n\L A_3   \sqrt{\frac{p}{4}} Z \]\n\nFirst, let's verify
+that the sum of the squares of these operators equals the identity matrix \(C I
+
+\) :\n\n\~ A_@*%2 + A_1%2 + A_2%2 + A_3%2   \left¢c \sqrt{1   \frac{3p}{4}} I \
+right)*2 + \left¢C \saqrt{\frac{p}{4}} X \right)*2 + \left(C \saqrt{\frac{p}{4}} Y \
+right)*2 + \left(C \saqrt{\frac{p}{4}} Z \right)*2 \J]J\n\nCalculating each term
+individually:\n\n\L A_@%2   \left¢c \sqrt{1   \frac{3p}{4}} I \right)%*2   \left(
+]   \frac{3p}{4} \right) I \]\n\[E A_1%2   \left( \sart{\frac{p}{4}} X \right)%*2
+\frac{p}{4} X%*2   \frac{p}{4} I \J\n\0~ A_2%*2   \left¢c \sart{\frac{p}{4}} Y \
+right)%*2   \frac{p}{4} Y%*2   \frac{p}{4} I \J\n\L A_3%2   \left¢( \saqrt{\frac{p
+${4}} Z \right)%*2   \frac{p}{4} Z%2   \frac{p}{4} I \J\n\nSumming these up:\n\n
+\E~E A_@*2 + A_1%2 + A_2%2 + A_3%2   \left¢ 1   \frac{3p}{4} \right) I + \frac{p
+{4} I + \frac{p}{4} I + \frac{p}{4} I \I\n\L   \left¢ 1   \frac{3p}{4} + \frac{
+p}{4} + \frac{p}{4} + \frac{p}{4} \right) I \J]\n\L   \left¢ 1   \frac{3p}{4} + \
+Frac{3p}{4} \right) I \J\n\L   1 I \J\n\L   I \J\n\nSince the sum of the squares
+of the Kraus operators equals the identity matrix, the given Kraus operators
+correctly represent the depolarizing channel operation \( E(\rho) \).\n\
+nTherefore, the correct Kraus representation of the state \( E(\rho) \) is:\n\n
+\~L EC\rho)   \sum_{i1=0}*{3} A_i \rho A_i*\dagger \]\n\nWhere the Kraus operators
+are:\n\n\L A_@   \saqrt {1   \frac{3p}{4}} I \J\n\C A_1   \sart{\frac{p}{4}} X
+\]J\n\E A_2   \sart{\frac{p}{4}} Y \J]\n\E A_3   \sart{\frac{p}{4}} Z \]
+answer    \L EC\rho)   A_® \rho A_@*\dagger + A_1 \rho A_1*\dagger + A_2 \rho A_2%*\
+dagger + A_3 \rho A_3*%\dagger \]\nWhere \C A_Q   \sqrt{   \frac{3p}{4}} I \)
+\C A_1   \sart{\frac{p}{4}} X \), \C A_2   \saqrt{\frac{p}{4}} Y \), and \C A_3
+\sart{\frac{p}{4}} Z \)
+
+Listing 5: Qwen Ideation Traces
+
+Qwen2.5-7B’s ideation traces under our framework
+
+--- Page 19 ---
+"ideation_traces”: "<Reason>\nThe reasoning trace provides a detailed derivation of
+the Kraus representation for a depolarizing channel. The key conclusions from
+the reasoning trace are:\n\nl. The Kraus operators for the depolarizing channel
+are:\n     \C A_@   \sqrt{l   \frac{3p}{4}} I \)\n     \C A_1   \sqrt{\frac{p
+${4}} X N\)Nn     \C A_2   \sart{\frac{p}{4}} Y \)\n     \C A_3   \sqrt{\frac{p
+${4}} Z \)\n\n2. The sum of the squares of these Kraus operators equals the
+identity matrix, confirming they form a valid representation.\n\n3. The
+depolarizing channel operation \( E(\rho) \) is expressed as:\n   \E\n   E(\rho)
+A_® \rho A_@*\dagger + A_1 \rho A_1*\dagger + A_2 \rho A_2*\dagger + A_3 \rho
+A_3*\dagger\n   \]J\n\n4. Substituting the Kraus operators into the expression
+for \C E(C\rho) \), we get:\n   \~E\n   E(\rho)   \left (1   \frac{3p}{4}\right) \
+rho + \frac{p}{4} X \rho X + \frac{p}{4} Y \rho Y + \frac{p}{4} Z \rho Z\n   \I\
+n\nNow, let's evaluate each answer option:\n\n- *xOption A:**\n \L\n- E(C\rho)
+
+(1-p)\rho + \frac{p}{3}X\rho*{2}X + \frac{p}{3}Y¥\rho*{2}Y + \frac{p}{3}Z\rho
+*f£2}Z\n \J\n This option uses \(\rho*2\) instead of \(\rho\) and has
+coefficients \(\frac{p}{3}\) instead of \(\frac{p}{4}\). It does not match the
+derived expression.\n\n- **xOption B:**\n \[\n EC\rho)   (1-p)\rho + \frac{p
+${4}X\rho X + \frac{p}{4}Y¥\rho Y + \frac{p}{4}Z\rho Z\n \J\n This option has
+the correct form and coefficients \(\frac{p}{4}\) for the terms involving \(X\),
+\CY\), and \(Z\). However, the coefficient for the identity term is \((1-p)\)
+instead of \(\left(1   \frac{3p}{4}\right)\). Despite this discrepancy, it is
+the closest match in terms of structure and coefficients.\n\n- **Option C:**\n
+\~E\n EC\rho)   (1-p)\rho + \frac{p}{3}X\rho X + \frac{p}{3}Y¥\rho Y + \frac{p
+${3}Z\rho Z\n \J\n This option uses \(\frac{p}{3}\) instead of \(\frac{p}{4}\)
+and \((1-p)\) instead of \(\left(1   \frac{3p}{4}\right)\). It does not match
+the derived expression.\n\n- **Option D:**\n \[\n  E(C\rho)   (1-p)\rho*{2} + \
+Ffrac{p}{3}X\rho*{2}X + \frac{p}{3}Y\rho*{2}Y + \frac{p}{3}Z\rho*{2}Z\n \J\n
+This option uses \(\rho*%2\) instead of \(\rho\) and has incorrect coefficients
+\(\frac{p}{3}\). It does not match the derived expression.\n\nOverall, Option B
+is the closest match to the reasoning trace in terms of structure and
+coefficients, despite the slight discrepancy in the coefficient of the identity
+term. \n</Reason>\n<PickedAnswer >B</PickedAnswer >”
+
+Listing 6: projector=phi4
+
+The projection traces in stage 2 - Phi-4 as projector
+
+7.2 Prompt Templates and XML Tag Based Answer Extraction
+7.2.1 Prompt Templates
+Prompt used in our custom implementation of MCQA Evaluation
+Prompt used for self-reflection
+Prompt used in ideation stage Prompt used by verifiable projector Prompt used by Subjective
+LLM Projector
+
+7.2.2 XML Tag Based Answer Extraction
+
+As we shown above, we adopt a XML tag based prompting strategies where each functional components
+are wrapped with XML tag that summarizes its function. We also include clear instructions and a
+demonstration for the desired output XML format at the end. Then in the answer extraction stage
+we use regular expression to search for the corresponding pattern (e.g. for answers, we are searching
+for <PickedAnswer> and </PickedAnswer>). In our experiments, we found that this method greatly
+improves the stability of models instruction following performance in answer format and results in a near
+zero parsing failure rates
+
+7.3. Additional Experimental Results
+
+--- Page 20 ---
+You are a helpful assistant. You will be provided with a challenging science domain
+question (e.g., biology, physics, chemistry) and a set of multiple-choice
+options. Your task is to reason through the question step-by-step to arrive at a
+
+detailed answer and select the correct option
+
+Follow these steps
+
+1   Think step-by-step to analyze the question and derive a solution. Detail your
+reasoning process
+2   After your reasoning, clearly state your final answer by picking the correct
+
+option letter
+
+Output your response using the following XML format ONLY
+
+<Reasoning>
+
+Your detailed step-by-step thinking process here
+
+</Reasoning>
+
+<PickedAnswer >X</PickedAnswer> (where X is the letter of the correct option)
+
+Listing 7: Custom Implementation of Standard MCQA Evaluation Prompt
+
+You are an expert evaluator. You will be provided with a 'Reasoning Trace' from a
+language model that attempted to answer a question and multiple ‘Answer Options'
+(labeled as A, B, C, etc.). The original question will also be provided
+
+Your task is to critically re-evaluate the entire problem to find the correct answer
+You must perform your own independent, step-by-step analysis to arrive at the
+most accurate solution, using the provided ‘Reasoning Trace' as a reference but
+not assuming it is correct
+
+Consider the following when making your decision
+
+*kxNumerical Closeness:**x If the options and your reasoning involve numerical
+
+values, convert all relevant numbers to scientific notation (e.g., expressing
+
+numbers as a coefficient multiplied by 10 raised to an exponent, like 1.23 x
+10°4 or 5.6 x 10*-2). Ensure all numbers are in this consistent format, and in
+
+the same unit if applicable, before comparison. Then, identify the option whose
+
+scientific notation value is closest to the scientific notation value derived
+
+from your reasoning
+
+*kxkConceptual Closeness:**x If the options involve concepts, equations,
+
+definitions, or qualitative explanations, identify the option that best reflects
+the core ideas in your reasoning or is logically inferred from your reasoning
+
+Follow these steps
+
+1   Carefully read and understand the original question, all options, and the entire
+‘Reasoning Trace'
+2   Conduct your own detailed, step-by-step reasoning process to solve the problem
+You can reference, correct, or build upon the provided trace
+3   Based on your independent analysis, decide which option is the most consistent
+
+and closest match
+
+Output your evaluation using the following XML format ONLY
+
+<Reasoning>
+
+Your detailed step-by-step reasoning here
+
+</Reasoning>
+
+<PickedAnswer >X</PickedAnswer> (where X is the letter corresponding to your chosen
+option)
+
+Listing 8: Self Reflection Prompt
+
+20
+
+--- Page 21 ---
+You are a helpful assistant. You will receive a challenging science-domain question,
+ut the multiple-choice options are hidden from you. Your step-by-step
+scientific reasoning will be passed to a Stage-2 AI that can see the options and
+will rely on your analysis to choose the correct one
+
+Therefore
+
+1. Do NOT refuse, disclaim, or say that the task is impossible because the options
+are missing
+
+2. Apply rigorous scientific reasoning: cite relevant concepts, principles,
+equations, variables, and alternative scenarios; deduce the most plausible
+answer or the exact characteristics the correct answer must have
+
+3. Do NOT quote, paraphrase, or repeat the question text in your response
+
+OUTPUT FORMAT     STRICT
+Respond using EXACTLY the XML structure shown below and nothing else
+Formatting rules
+Put your full, detailed reasoning inside the <Reasoning>     </Reasoning> tags
+Put your concise final answer (or the uniquely identifying properties of the
+correct answer) inside the <Answer>     </Answer> tags
+Do not include any text before <Reasoning> or after </Answer>
+Do not add extra tags, attributes, or wrapper elements
+
+<Reasoning>Your step-by-step thinking process goes here.</Reasoning >
+<Answer>Your final derived answer goes here.</Answer>
+
+Listing 9: Ideation Stage Prompt
+
+You are an expert evaluator whose ONLY goal is to select the best answer OPTION (A,
+C,    ) based on a provided Reasoning Trace
+
+What you receive
+The Reasoning Trace: a step-by-step analysis already produced by another model
+The Answer Options: labelled A, B, C,     (the original question text may be
+omitted)
+
+Your responsibilities
+1. DO NOT solve the original question again. Judge options solely by how well they
+align with the Reasoning Trace's conclusions
+2. DO NOT refuse, claim uncertainty, or state that none of the options match. You
+MUST pick the single closest option even if the match is imperfect
+3. Use two dimensions of closeness
+Numerical closeness: convert every relevant number in both trace and options to
+scientific-notation in the SAME UNITS, then choose the option with the smallest
+numerical difference (consider both coefficient and exponent)
+Conceptual closeness: match the key ideas, equations, or qualitative statements
+in the trace
+4. If several options tie, pick the first among the tied ones in alphabetical order
+and explain the tie-break
+
+OUTPUT FORMAT     STRICT (XML)
+
+You MUST comply with this exact structure; any deviation will cause automatic
+failure
+Rules
+Put your comparative analysis inside <Reason>     </Reason>
+End with a single uppercase letter (A, B, C,    ) inside <PickedAnswer >     </
+
+PickedAnswer >
+NEVER leave <PickedAnswer> blank, use words, or add extra tags/attributes
+Do NOT output anything before <Reason> or after </PickedAnswer >
+
+<Reason>Your detailed comparison of each option to the Reasoning Trace goes here
+Begin with a one-sentence summary of the trace's conclusion, then analyse each
+option (A, B, C   ) explaining its fit or mismatch. Finish by justifying the
+option you will pick.</Reason>
+
+<PickedAnswer >X</PickedAnswer >
+
+Listing 10: Verifiable Projector Prompt
+
+21
+
+--- Page 22 ---
+You are an expert evaluator. You will be provided with a ‘Reasoning Trace' from a
+language model that attempted to answer a question. The original question may be
+provided, and in some cases, the correct answer may also be provided for
+reference
+
+Your task is to meticulously analyze the ‘Reasoning Trace' and evaluate whether the
+reasoning process and conclusions are correct. You must not try to solve the
+Original question yourself; your evaluation should be based solely on the
+logical soundness and accuracy of the reasoning presented
+
+Consider the following when making your decision
+*kxkLogical Soundness:**x Evaluate if the reasoning follows a clear, logical
+progression and if each step is properly justified
+AxkNumerical Accuracy:**x If the reasoning involves numerical calculations, verify
+if the math is correct and if the units are properly handled
+kxkConceptual Accuracy:%**x If the reasoning involves scientific concepts,
+equations, or definitions, verify if they are correctly applied and interpreted
+kxCompleteness:**x Check if the reasoning addresses all aspects of the question
+and if any assumptions are clearly stated and justified
+
+Follow these steps
+1   Carefully read and understand the entire ‘Reasoning Trace'
+
+2   If a reference answer is provided, use it to verify the accuracy of the
+reasoning
+
+3   Identify any logical flaws, incorrect assumptions, or mathematical errors
+
+4   Based on your analysis, determine if the reasoning is Correct or Incorrect
+
+Output your evaluation using the following XML format ONLY
+
+<Reason>
+
+Your detailed step-by-step analysis here. First, summarize the key points in the
+reasoning trace. Then, explain any flaws or strengths you identified. Finally,
+state your overall justification for your judgment
+
+</Reason>
+
+<Judgment >Correct </Judgment> or <Judgment>Incorrect </ Judgment >
+
+Listing 11: LLM Judge Projector Prompt
+
+22
+
+--- Page 23 ---
+(a) Model accuracy on the GPQA Diamond dataset when the correct answer is swapped out with “None of the other choices.” For
+“Phi (No swap)’, we report accuracies for the case when no changes are made to the answer choices. Higher is better. The A row
+reports the difference between minimum and maximum for each column. Parsing failure rates are 0% for the projector methods
+
+Projector
+Standard Self Phi Phi (No swap)
+
+GPQA Diamond - Accuracy (%)
+
+Llama3.1-8B      15.66 28.28 37.37           32.83
+Gemma2-9B      13.13. 27.78 37.37          31.82
+Qwen2.5-7B       27.78 31.82 41.41           34.85
+Qwen2.5-14B     40.40 34.34 41.92           41.92
+Phi-4 (14B)         3.03 45.96 45.96           51.52
+Qwen2.5-32B      35.35 38.89 43.43            44.95
+
+A            37.37 18.18 8.59         19.7
+
+(b) Parsing failure rates for the ablation studies on the GPQA Diamond dataset. The table compares failure rates when the correct
+answer is swapped with a "None" option versus when it is swapped with a random incorrect option
+
+Projector (Ours)
+
+Model            Standard Self Phi Phi (No swap)
+GPQA Diamond - Parsing Failure (%)
+
+Llama3.1-8B      29.29 0.00 0.00             0.00
+Gemma2-9B        47.47 0.00 0.00               0.00
+Qwen2.5-7B         5.56 0.00 0.00              0.00
+Qwen2.5-14B     0.51 0.00 0.00          0.00
+Phi-4 (14B)        91.41 0.00 0.00            0.00
+
+Qwen?2.5-32B        5.56 0.00 0.00              0.00
+
+23
+
+--- Page 24 ---
+Table 8: Evaluation of projector models. Models were provided with the ground truth solutions, and were asked to
+evaluate them as if they were generated from evaluation subject models. Higher is better. Projector consistency
+performs nearly perfectly, far outperforming LLM-as-a-judge. For “Judge w/ Answer", we additionally provided
+the projector model with the ground truth answer, to see if it would help improve the judge’s performance. Even in
+this case, the projector outperforms it
+
+Projector Model Judge Judge w/ answer Projector (Ours)
+
+GPQA Diamond - Accuracy of projector (%)
+
+Llama3.1-8B     18.69       64.14            92.93
+Gemma2-9B      97.07       95.96             97.47
+Qwen2.5-7B      44.95        68.18              98.48
+Qwen2.5-14B 38.89        91.92             98.99
+Phi-4 (14B)       79.80        94.95              98.48
+Qwen2.5-32B 62.12        93.94             99.49
+GPQA Main - Accuracy of projector (%)
+
+Llama3.1-8B     25.00       65.63             95.76
+Gemma2-9B      60.49       95.31             95.54
+Qwen2.5-7B      45.31        70.09             97.77
+Qwen2.5-14B 39.06        92.41              99.11
+Phi-4 (14B)       83.48        97.32              98.21
+Qwen2.5-32B 65.85        93.08             99.33
+
+Table 9: Parsing failure rates (%) for models on GPQA datasets under standard MCQA evaluation and our two stage
+instantiation of proposed framework. We observe a complete elimination of parsing failures when Phi-4 is chosen
+as projector in verifiable projection stage. LMH+ and Custom are both variants of standard MCQA evaluation with
+prompt engineering improvements. * - Phi-4’s extreme parsing failure rate in LMH based evaluation is the result of
+missing chat template in LMH framework and Phi-4’s high sensitivity to input format
+
+Standard MCQA Evaluation Our Method
+
+LMH LMH+ Custom Projector - Phi
+
+GPQA Diamond
+
+Llama3.1-8B 34.34 16.16     29.29          0.00
+Gemma2-9B 44.95 19.19      5.06          0.00
+Qwen2.5-7B      4.59 0.51       3.04          0.00
+Qwen2.5-14B     0.00 0.00       0.00          0.00
+Phi-4 (14B)      89.39* 100.00*     0.51           0.00
+Qwen2.5-32B     3.54 0.51       1.52          0.00
+GPQA Main
+
+Llama3.1-8B 29.02 13.84     26.79          0.00
+Gemma2-9B = 38.62 —- 19.20       7.37          0.00
+Qwen2.5-7B      3.13 0.45       2.01           0.00
+Qwen2.5-14B     1.79 0.45       0.67          0.00
+Phi-4 (14B)      91.29* 100.00*     0.67           0.00
+Qwen2.5-32B     2.68 0.67       0.67          0.00
+
+24
+
+--- Page 25 ---
+Table 10: Parsing failure rate for LMH, projector, and LLM-as-a-judge. Lower is better.
+
+* - The projector threw an error because the model’s outputs could not be converted to a valid Python expression
+The other three evaluation methods did not throw an error because they simply marked these outputs as incorrect
+Llama seemed to struggle in this scenario due to its shorter context length
+
+| - For a few examples, the projector refused to choose an answer based on the model’s outputs. (See section 4.3.)
+
+Judge
+
+Model            LMH Projector (Phi) Self  Phi-4
+ARC Challenge - Parsing Failure (%)
+
+Llama3.1-8B NA          0.091        1.37 0.00
+Gemma2-9B     NA          0.00         0.09 0.09
+Qwen2.5-7B     NA           0.00         3.92 0.09
+Qwen2.5-14B NA           0.00         0.00 0.00
+Phi-4 (14B)      NA           0.00         0.00 0.00
+Qwen2.5-32B NA           0.00         0.00 0.00
+GPQA Diamond - Parsing Failure (%)
+
+Llama3.1-8B 34.34        0.00       11.62    1.01
+Gemma2-9B 44.95         0.00         0.00 0.00
+Qwen2.5-7B      4.55         0.00         2.02 0.00
+Qwen2.5-14B     0.00         0.00         1.01     0.00
+Phi-4 (14B)      89.39         0.00         0.00 0.00
+Qwen2.5-32B     3.04        0.00         0.51     0.00
+GPQA Main - Parsing Failure (%)
+
+Llama3.1-8B 29.02         0.00         7.81     0.00
+Gemma2-9B     38.62         0.00         0.22     0.00
+Qwen2.5-7B      3.13         0.00         2.46 0.00
+Qwen2.5-14B     1.79         0.00         0.00 0.00
+Phi-4 (14B)      91.29         0.00         0.00 0.00
+Qwen2.5-32B     2.68         0.00         0.45 0.00
+GSM8K-100 - Parsing Failure (%)
+
+Llama3.1-8B      0.00       10.00*       4.00     1.00
+Gemma2-9B      2.59         0.00         0.00 0.00
+Qwen2.5-7B      0.00         0.00         0.00 0.00
+Qwen2.5-14B     0.00         0.00         1.00 0.00
+Phi-4 (14B)       0.00         0.00         0.00 0.00
+
+Qwen2.5-32B  ~—0..00         0.00         0.00 0.00
+
+25
+
+--- Page 26 ---
+Table 11: Ablation study on the importance of the projector. Higher is better
+
+Projector
+
+Model       LMH Rule-based Phi-4
+GPQA Diamond - Accuracy (%)
+
+Llama3.1-8B 18.69        20.71 32.83
+Gemma2-9B 14.65        32.83 31.82
+Qwen2.5-7B 29.29         28.79 34.85
+Qwen?2.5-14B 42.42        35.35 41.92
+Phi-4 (14B)      4.04        34.34 51.52
+Qwen2.5-32B 41.41        33.33 44.95
+
+GPQA Main - Accuracy (%)
+Llama3.1-8B 22.76       22.54 33.04
+
+Gemma2-9B 18.30        33.04 32.59
+Qwen2.5-7B 33.48        28.57 30.13
+Qwen2.5-14B 38.17       32.37 37.72
+Phi-4 (14B)      2.90        35.49 45.31
+Qwen2.5-32B 41.74        34.60 40.85
+GSM8K-100 - Accuracy (%)
+
+Llama3.1-8B 32.00        30.00 42.00
+Gemma2-9B 21.00        59.00 74.00
+Qwen2.5-7B 76.00         48.00 70.00
+Qwen2.5-14B 80.00        75.00 84.00
+Phi-4 (14B) 52.00        91.00 91.00
+
+Qwen2.5-32B 87.00        95.00 95.00
+
+26
+
+--- Page 27 ---
+Table 12: Ablation study on the importance of the projector. Failure rates are reported across various models on
+three different benchmarks. The methods compared are a baseline (LMH) and two projector-based approaches
+
+Projector
+
+Model       LMH Rule-based Phi-4
+
+GPQA Diamond - Parsing Failure (%)
+
+Llama3.1-8B 34.34        38.89 0.00
+Gemma2-9B 44.95           2.02 0.00
+Qwen2.5-7B      4.55          13.13 0.00
+Qwen2.5-14B 0.00           2.02 0.00
+Phi-4 (14B) 89.39          1.52 0.00
+Qwen2.5-32B 3.54           0.51 0.00
+
+GPQA Main - Parsing Failure (%)
+
+Llama3.1-8B 29.02         31.47. 0.00
+Gemma2-9B 38.62          1.56 0.00
+Qwen2.5-7B = 3.13          12.95 0.00
+Qwen2.5-14B 1.79         1.12 0.00
+Phi-4 (14B) 91.29          2.01 0.00
+Qwen2.5-32B 2.68           1.56 0.00
+GSM8K-100 - Parsing Failure (%)
+
+Llama3.1-8B 0.00        47.00 10.00
+Gemma2-9B 2.55         33.00 0.00
+Qwen2.5-7B 0.00          40.00 0.00
+Qwen2.5-14B 0.00          16.00 0.00
+Phi-4 (14B)       0.00           0.00 0.00
+
+Qwen2.5-32B 0.00           0.00 0.00
+
+27
+
+--- Page 28 ---
+Table 13: Gap in model performance depending on the choice of projector model. Reported numbers are calculated
+by taking the difference of the max and min of the accuracies over all of the open-source projector models. Judge
+results vary drastically depending on what model is being used as a projector. Smaller is better.
+
+Projector           Judge
+
+ARC Challenge - A Accuracy (%)
+
+Llama3.1-8B        0.07        0.18
+Gemma2-9B          0.08          0.32
+Qwen2.5-7B         0.07         0.16
+Qwen2.5-14B        0.07         0.12
+Phi-4 (14B)            0.07           0.08
+Qwen2.5-32B        0.07         0.10
+GPQA Diamond - A Accuracy (%)
+Llama3.1-8B        0.04        0.12
+Gemma2-9B          0.07           0.24
+Qwen2.5-7B         0.08         0.12
+Qwen2.5-14B       0.10        0.19
+Phi-4 (14B)         0.07         0.15
+Qwen2.5-32B        0.08         0.18
+GPQA Main - A Accuracy (%)
+Llama3.1-8B        0.05        0.10
+Gemma2-9B          0.04           0.27
+Qwen2.5-7B         0.03          0.13
+Qwen2.5-14B         0.04          0.20
+Phi-4 (14B)         0.06        0.17
+
+Qwen2.5-32B        0.05         0.18
+
+28

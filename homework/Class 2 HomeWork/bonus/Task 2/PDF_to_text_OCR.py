@@ -7,22 +7,16 @@ Scrab the /abs/ page and use Trafilatura to clean the content
 
 import requests
 import xml.etree.ElementTree as ET
-from urllib.parse import urlparse, urljoin
 import time
 from typing import List, Dict, Optional
-import trafilatura
 from dataclasses import dataclass
 import logging
 from time import sleep
 import pytesseract
-import io
 import json
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from PIL import Image
+from pdf2image import convert_from_bytes
+import os
 
 
 @dataclass
@@ -35,7 +29,7 @@ class Paper:
     categories: List[str]
     published: str
     url: str
-    ocr_abstract: Optional[str] = None
+    ocr_full_text: Optional[str] = None
 
 
     def to_dict(self) -> Dict:
@@ -45,7 +39,8 @@ class Paper:
             'title': self.title,
             'abstract': self.abstract,
             'authors': self.authors,
-            'date': self.published
+            'date': self.published,
+            'ocr_text_path': self.ocr_full_text
         }
     
 class ArxivScraper:
@@ -57,8 +52,6 @@ class ArxivScraper:
         self.session.headers.update({
             "User-Agent": "Mozilla/5.0 (Macintosh; Intel Max OS X 10_15_7) AppleWebKit/537.36"
         })
-        self.driver = None
-        self._setup_webdriver()
 
     def query_arxiv(self, category: str, max_results: int = 20) -> List[Dict]:
         """
@@ -167,116 +160,51 @@ class ArxivScraper:
         
         return papers
     
-    def scrap_abstract_page(self, arxiv_id:str) -> Optional[str]:
-        """
-        scrap the arXiv abstract page and clean content with Trafilatura
+    
+    def download_pdf(self, arxiv_id: str) -> Optional[bytes]:
+        """Download PDF file from arXiv"""
+        pdf_url = f"https://arxiv.org/pdf/{arxiv_id}.pdf"
         
-        """
-        abs_url = f"https://arxiv.org/abs/{arxiv_id}"
-
         try:
-            response = self.session.get(abs_url, timeout=30)
+            response = self.session.get(pdf_url, timeout=60)
             response.raise_for_status()
-
-            #use Trafilatura to extract and clean content
-            if response.text and response.text.strip():
-                cleaned_content = trafilatura.extract(response.text)
-                if cleaned_content:
-                    return cleaned_content
-                else:
-                    return "Content extraction failed"
-            else: 
-                return "No response content"
-            
-        
+            return response.content
         except requests.RequestException as e:
-            print(f"Error scraping {abs_url}: {e}")
+            logging.error(f"Error downloading PDF {pdf_url}: {e}")
             return None
     
-    def _setup_webdriver(self):
-        """set up Chrome webdriver for screenshot"""
+    def pdf_to_images(self, pdf_bytes: bytes) -> List[Image.Image]:
+        """Convert PDF bytes to list of PIL Images"""
         try:
-            chrome_options = Options()
-            chrome_options.add_argument('--headless')
-            chrome_options.add_argument('--no-sandbox')
-            chrome_options.add_argument('disable-dev-shm-usage')
-            chrome_options.add_argument('--window-size=1920,1080')
-            self.driver = webdriver.Chrome(options= chrome_options)
+            # Use higher DPI for better OCR quality
+            images = convert_from_bytes(pdf_bytes, dpi=600, fmt='png')
+            return images
         except Exception as e:
-            logging.warning(f("Warning: could not setup Webdriver: {e}"))
-            self.driver = None
+            logging.error(f"Error converting PDF to images: {e}")
+            return []
     
-    def take_screenshot(self, url:str) -> Optional[bytes]:
-        if not self.driver:
+    def extract_text_from_pdf_with_layout(self, pdf_bytes: bytes) -> Optional[str]:
+        """Extract text from PDF using OCR with layout preservation"""
+        images = self.pdf_to_images(pdf_bytes)
+        if not images:
             return None
         
-        try:
-            self.driver.get(url)
-            #Wait page to load
-            WebDriverWait(self.driver, 10).until(
-                EC.presence_of_element_located((By.TAG_NAME, "body"))
-            )
-
-            #Take screenshot
-            screenshot = self.driver.get_screenshot_as_png()
-
-            return screenshot
+        full_text = []
         
-        except Exception as e:
-            logging.error(f"Error taking screenshot of {url}: {e}")
-            return None
-    
-    def extract_text_from_screenshot(self, screenshot_bytes:bytes) ->Optional[str]:
-        """Use Tesseract OCR to extract text from screenshot"""
-
-        try:
-            image = Image.open(io.BytesIO(screenshot_bytes))
-
-            #user Tesseract to extract text
-            extracted_text = pytesseract.image_to_string(image)
-
-            return extracted_text.strip()
+        for page_num, image in enumerate(images, 1):
+            try:
+                # Use PSM 3 for fully automatic page segmentation with better layout preservation
+                custom_config = r'--oem 3 --psm 3 -c preserve_interword_spaces=1 -c textord_heavy_nr=1 -c textord_min_linesize=2.5'
+                page_text = pytesseract.image_to_string(image, config=custom_config)
+                
+                if page_text.strip():
+                    full_text.append(f"--- Page {page_num} ---\n{page_text.strip()}")
+                    
+            except Exception as e:
+                logging.error(f"Error extracting text from page {page_num}: {e}")
+                continue
         
-        except Exception as e:
-            logging.error(f"Error extracting text with OCR: {e}")
-            return None
-    
-    def scrap_with_ocr(self, arxiv_id:str) -> Optional[str]:
-        """scrap abstract page using screenshots and OCR"""
-        abs_url = f"https://arxiv.org/abs/{arxiv_id}"
-
-        #take screenshot
-        screenshot = self.take_screenshot(abs_url)
-        if not screenshot:
-            return None
-        
-        #Extract screenshot to ext
-        ocr_text = self.extract_text_from_screenshot(screenshot)
-
-        if not ocr_text:
-            return None
-        
-        lines = ocr_text.split('\n')
-        abstract_start = -1
-
-        for i, line in enumerate(lines):
-            if 'abstract' in line.lower() and len(line.strip())<20:
-                abstract_start = i+1
-                break
-
-        if abstract_start>=0:
-            abstract_lines=[]
-            for line in lines[abstract_start:]:
-                line = line.strip()
-                if not line:
-                    continue
-                if any(header in line.lower() for header in ['subjects:', 'cite as:', 'submission']):
-                    break
-                abstract_lines.append(line)
-            
-            return ' '.join(abstract_lines) if abstract_lines else ocr_text
-        
-        return ocr_text
+        return "\n\n".join(full_text) if full_text else None
     
     def save_to_json(self, papers: List[Paper], filename:str="arxiv_clean.json", max_size_mb:float=1.0):
 
@@ -303,8 +231,8 @@ class ArxivScraper:
             
 
     def clean_up(self):
-        if self.driver:
-            self.driver.quit()
+        # No cleanup needed for PDF processing
+        pass
     
     def scrape_papers(self, category: str, max_results: int = 200) -> List[Paper]:
 
@@ -332,12 +260,25 @@ class ArxivScraper:
                 url=data.get('url', '')
             )
 
-            #scrap using OCR for additonal content
+            # Download PDF and extract full text using OCR
             if paper.id:
-                logging.info(f"  Taking screenshot and running OCR...")
-                ocr_abstract = self.scrap_with_ocr(paper.id)
-                if ocr_abstract:
-                    paper.abstract = ocr_abstract
+                logging.info(f"  Downloading PDF and running OCR...")
+                pdf_bytes = self.download_pdf(paper.id)
+                if pdf_bytes:
+                    # Create output directory
+                    os.makedirs("pdf_ocr", exist_ok=True)
+                    
+                    # Extract full text with layout preservation and save as text file
+                    ocr_full_text = self.extract_text_from_pdf_with_layout(pdf_bytes)
+                    if ocr_full_text:
+                        # Save OCR text to file
+                        text_filename = f"{paper.id}_ocr.txt"
+                        text_path = os.path.join("pdf_ocr", text_filename)
+                        
+                        with open(text_path, 'w', encoding='utf-8') as f:
+                            f.write(ocr_full_text)
+                        
+                        paper.ocr_full_text = text_path  # Store path instead of content
             
             papers.append(paper)
 
@@ -352,7 +293,7 @@ def main():
     try:
 
         category = "cs.CL"
-        max_papers = 10
+        max_papers = 1
         papers = scrapper.scrape_papers(category, max_results=max_papers)
 
         print(f"\nScraping completed! Found {len(papers)} papers.")
@@ -369,8 +310,8 @@ def main():
             print(f"Categories: {', '.join(paper.categories)}")
             print(f"Published: {paper.published}")
             print(f"Abstract: {paper.abstract[:200]}...")
-            if paper.ocr_abstract:
-                print(f"OCR Abstract: {paper.ocr_abstract[:200]}...")
+            if paper.ocr_full_text:
+                print(f"OCR Text Path: {paper.ocr_full_text}")
             print(f"URL: {paper.url}")
         
     finally:
