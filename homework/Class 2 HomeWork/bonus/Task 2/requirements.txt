@@ -1,0 +1,6 @@
+requests
+trafilatura
+pytesseract
+selenium
+pillow
+webdriver-manager

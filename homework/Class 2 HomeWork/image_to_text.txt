@@ -1,0 +1,9 @@
+Tesseract supports over 100 languages, and you can even train it for custom languages or fonts. To use a
+
+different language, you can download the corresponding trained data files and specify the language in the -|
+flag.
+
+For example, to use Spanish (spa):
+Bw
+
+na, a tb Ang
