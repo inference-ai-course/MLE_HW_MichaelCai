@@ -2,17 +2,18 @@ from typing import List, Optional, Dict, Any
 import os
 import logging
 
-try:
-    from dotenv import load_dotenv
-    load_dotenv()  # Load environment variables from .env file
-except ImportError:
-    print("Warning: python-dotenv not installed. Run: pip install python-dotenv")
-    print("Environment variables will be loaded from system only.")
+# try:
+#     from dotenv import load_dotenv
+#     load_dotenv()  # Load environment variables from .env file
+# except ImportError:
+#     print("Warning: python-dotenv not installed. Run: pip install python-dotenv")
+#     print("Environment variables will be loaded from system only.")
 
 try:
     from langchain_openai import OpenAIEmbeddings
     from langchain_chroma import Chroma
     from langchain_core.documents import Document
+    from langchain_core.vectorstores import VectorStoreRetriever
 except ImportError:
     print("Warning: langchain packages not installed. Run: pip install langchain-openai langchain-community langchain-core chromadb")
     OpenAIEmbeddings = None
@@ -25,7 +26,7 @@ class EmbeddingService:
     Service for generating embeddings from text chunks using OpenAI embeddings and Chroma vector store.
     """
     
-    def __init__(self, persist_directory: Optional[str] = None):
+    def __init__(self):
         """
         Initialize the embedding service with OpenAI embeddings and Chroma vector store.
         
@@ -44,13 +45,11 @@ class EmbeddingService:
             )
         
         # Set up persist directory (priority: parameter > .env file > default)
-        if persist_directory:
-            self.persist_directory = persist_directory
-        else:
-            self.persist_directory = os.getenv("PERSIST_DIRECTORY", "./chroma_db")
+        self.persist_directory = os.getenv("PERSIST_DIRECTORY", "./chroma_db")
+            
         
         # Initialize OpenAI embeddings
-        self.embeddings = OpenAIEmbeddings()
+        self.embeddings = OpenAIEmbeddings(api_key=os.getenv("OPENAI_API_KEY"))
         self.vectorstore = None
         
         print(f"Embedding service initialized with persist directory: {self.persist_directory}")
@@ -89,7 +88,8 @@ class EmbeddingService:
         self.vectorstore = Chroma.from_documents(
             documents=documents,
             embedding=self.embeddings,
-            persist_directory=self.persist_directory
+            persist_directory=self.persist_directory,
+            collection_name=os.getenv("COLLECTION_NAME")
         )
         
         return self.vectorstore
@@ -104,8 +104,10 @@ class EmbeddingService:
         try:
             self.vectorstore = Chroma(
                 persist_directory=self.persist_directory,
-                embedding_function=self.embeddings
+                embedding_function=self.embeddings,
+                collection_name=os.getenv("COLLECTION_NAME")
             )
+       
             return self.vectorstore
         except Exception as e:
             logging.warning(f"Could not load existing vector store: {e}")
@@ -119,6 +121,7 @@ class EmbeddingService:
             chunks: List of text chunks to add
             metadatas: Optional metadata for each chunk
         """
+        print("add chunks")
         if not self.vectorstore:
             raise ValueError("Vector store not created. Call create_vectorstore() first.")
         
@@ -140,7 +143,7 @@ class EmbeddingService:
         # Add to vector store
         self.vectorstore.add_documents(documents)
     
-    def similarity_search(self, query: str, k: int = 5, filter_dict: Optional[Dict] = None) -> List[Document]:
+    def similarity_search(self, query: str, k: int = 3, filter_dict: Optional[Dict] = None) -> List[Document]:
         """
         Search for similar chunks using a text query.
         
@@ -200,35 +203,15 @@ class EmbeddingService:
             Embedding dimension (1536 for OpenAI)
         """
         return 1536  # OpenAI embeddings are 1536 dimensions
-
-
-# Convenience functions for quick usage
-def create_embedding_service(openai_api_key: Optional[str] = None, persist_directory: str = "./chroma_db") -> EmbeddingService:
-    """
-    Create an embedding service instance with OpenAI embeddings.
     
-    Args:
-        openai_api_key: OpenAI API key
-        persist_directory: Directory to persist vector store
-        
-    Returns:
-        EmbeddingService instance
-    """
-    return EmbeddingService(openai_api_key, persist_directory)
+    def get_retriever(self):
 
+        if not self.vectorstore:
+            raise ValueError("Vector store not created. Call create_vectorstore() or load_vectorstore() first.")
+        retriever = self.vectorstore.as_retriever(
+            search_type="mmr",
+            search_kwargs={"k": 3, "fetch_k": 5}
+        )
 
-def create_vectorstore_from_chunks(chunks: List[str], openai_api_key: Optional[str] = None, 
-                                 persist_directory: str = "./chroma_db") -> Chroma:
-    """
-    Quick function to create a vector store from text chunks.
-    
-    Args:
-        chunks: List of text chunks
-        openai_api_key: OpenAI API key
-        persist_directory: Directory to persist vector store
-        
-    Returns:
-        Chroma vector store
-    """
-    service = EmbeddingService(openai_api_key, persist_directory)
-    return service.create_vectorstore(chunks)
+        return retriever
+

@@ -93,4 +93,4 @@ models/*.joblib
 test_output/
 test_results/
 
-data/pdfs
+data/
