@@ -1,0 +1,75 @@
+user
+
+Search for knowledge graph.assistant
+
+{"function": "search_arxiv", "arguments": {"query": "knowledge graph"}}
+generated response for  Search for knowledge graph.: {"function": "search_arxiv", "arguments": {"query": "knowledge graph"}}
+LangGraph response: Found 2 relevant papers:
+
+1. **Knowledge Graphs: Opportunities and Challenges**
+   Authors: Ciyuan Peng, Feng Xia, Mehdi Naseriparsa et al.
+   Abstract: With the explosive growth of artificial intelligence (AI) and big data, it
+has become vitally important to organize and represent the enormous volume of
+knowledge appropriately. As graph data, knowled...
+   arXiv ID: 2303.13948v1
+
+2. **Assisted Knowledge Graph Authoring: Human-Supervised Knowledge Graph
+  Construction from Natural Language**
+   Authors: Marcel Gohsen, Benno Stein
+   Abstract: Encyclopedic knowledge graphs, such as Wikidata, host an extensive repository
+of millions of knowledge statements. However, domain-specific knowledge from
+fields such as history, physics, or medicine ...
+   arXiv ID: 2401.07683v1
+
+
+INFO:     127.0.0.1:0 - "POST /chat_langgraph HTTP/1.1" 200 OK
+/Users/caimichael/Project/AI Class/MLE_HW_MichaelCai/homework/Class6HomeWork/michael_env/lib/python3.10/site-packages/whisper/transcribe.py:132: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+user text:  What is 5 times 6?
+Model Inference  What is 5 times 6?
+Response: system
+
+Cutting Knowledge Date: December 2023
+Today Date: 07 Sep 2025
+
+user
+
+What is 5 times 6?assistant
+
+{"function": "calculate", "arguments": {"expression": "5 * 6"}}
+generated response for  What is 5 times 6?: {"function": "calculate", "arguments": {"expression": "5 * 6"}}
+LangGraph response: 30
+INFO:     127.0.0.1:0 - "POST /chat_langgraph HTTP/1.1" 200 OK
+/Users/caimichael/Project/AI Class/MLE_HW_MichaelCai/homework/Class6HomeWork/michael_env/lib/python3.10/site-packages/whisper/transcribe.py:132: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+user text:  What is the weather in Toronto today?
+Model Inference  What is the weather in Toronto today?
+Response: system
+
+Cutting Knowledge Date: December 2023
+Today Date: 07 Sep 2025
+
+user
+
+What is the weather in Toronto today?assistant
+
+I can't provide real-time weather updates, but you can check the weather forecast on your phone or website for the latest conditions in Toronto.
+generated response for  What is the weather in Toronto today?: I can't provide real-time weather updates, but you can check the weather forecast on your phone or website for the latest conditions in Toronto.
+LangGraph response: I can't provide real-time weather updates, but you can check the weather forecast on your phone or website for the latest conditions in Toronto.
+INFO:     127.0.0.1:0 - "POST /chat_langgraph HTTP/1.1" 200 OK
+/Users/caimichael/Project/AI Class/MLE_HW_MichaelCai/homework/Class6HomeWork/michael_env/lib/python3.10/site-packages/whisper/transcribe.py:132: UserWarning: FP16 is not supported on CPU; using FP32 instead
+  warnings.warn("FP16 is not supported on CPU; using FP32 instead")
+user text:  Where is Beijing?
+Model Inference  Where is Beijing?
+Response: system
+
+Cutting Knowledge Date: December 2023
+Today Date: 07 Sep 2025
+
+user
+
+Where is Beijing?assistant
+
+Beijing is the capital city of China.
+generated response for  Where is Beijing?: Beijing is the capital city of China.
+LangGraph response: Beijing is the capital city of China.
